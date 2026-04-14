@@ -30,6 +30,12 @@ pipeline {
         timestamps()
     }
 
+    // Maven tool must be configured in: Manage Jenkins → Tools → Maven → name "M3"
+    // If not configured, the Test stage will fail with UNSTABLE (non-blocking).
+    tools {
+        maven 'M3'
+    }
+
     stages {
 
         // ── 1. CHECKOUT ────────────────────────────────────────
