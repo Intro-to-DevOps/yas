@@ -32,8 +32,10 @@ pipeline {
 
     // Maven tool must be configured in: Manage Jenkins → Tools → Maven → name "M3"
     // NodeJS tool must be configured in: Manage Jenkins → Tools → NodeJS → name "NodeJS"
-    // (Requires the NodeJS Plugin in Jenkins)
+    // JDK tool must be configured in: Manage Jenkins → Tools → JDK → name "JDK 25"
+    // (Java 25 is required because the project's pom.xml specifies <java.version>25</java.version>)
     tools {
+        jdk 'JDK 25'
         maven 'M3'
         nodejs 'NodeJS'
     }
