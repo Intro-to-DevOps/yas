@@ -31,9 +31,11 @@ pipeline {
     }
 
     // Maven tool must be configured in: Manage Jenkins → Tools → Maven → name "M3"
-    // If not configured, the Test stage will fail with UNSTABLE (non-blocking).
+    // NodeJS tool must be configured in: Manage Jenkins → Tools → NodeJS → name "NodeJS"
+    // (Requires the NodeJS Plugin in Jenkins)
     tools {
         maven 'M3'
+        nodejs 'NodeJS'
     }
 
     stages {
