@@ -16,42 +16,44 @@ pipeline {
         stage('Detect Changed Services') {
             steps {
                 script {
-                    def changedServicesStr = sh(
-                        script: '''
-                            git fetch origin +refs/heads/main:refs/remotes/origin/main >/dev/null 2>&1 || true
+                    sh '''
+                        git fetch origin +refs/heads/main:refs/remotes/origin/main >/dev/null 2>&1 || true
 
-                            DIFF=$(git diff --name-only origin/main...HEAD 2>/dev/null || true)
-                            if [ -z "$DIFF" ]; then
-                                echo "WARNING: origin/main diff empty, falling back to last commit files" >&2
-                                DIFF=$(git log -m -1 --name-only --pretty="format:" 2>/dev/null || true)
-                            fi
+                        DIFF=$(git diff --name-only origin/main...HEAD 2>/dev/null || true)
+                        if [ -z "$DIFF" ]; then
+                            echo "WARNING: origin/main diff empty, falling back to last commit files"
+                            DIFF=$(git log -m -1 --name-only --pretty="format:" 2>/dev/null || true)
+                        fi
 
-                            echo "--- GIT DIFF OUTPUT ---" >&2
-                            echo "$DIFF" >&2
+                        echo "--- GIT DIFF OUTPUT ---"
+                        echo "$DIFF"
 
-                            SERVICES="backoffice storefront backoffice-bff storefront-bff media product cart order rating customer location inventory tax search recommendation promotion payment payment-paypal webhook sampledata common-library delivery"
+                        SERVICES="backoffice storefront backoffice-bff storefront-bff media product cart order rating customer location inventory tax search recommendation promotion payment payment-paypal webhook sampledata common-library delivery"
 
-                            CHANGED=""
-                            for svc in $SERVICES; do
-                                if echo "$DIFF" | grep -qE "^${svc}/"; then
-                                    if [ -z "$CHANGED" ]; then
-                                        CHANGED="$svc"
-                                    else
-                                        CHANGED="$CHANGED,$svc"
-                                    fi
+                        CHANGED=""
+                        for svc in $SERVICES; do
+                            if echo "$DIFF" | grep -qE "^${svc}/"; then
+                                if [ -z "$CHANGED" ]; then
+                                    CHANGED="$svc"
+                                else
+                                    CHANGED="$CHANGED,$svc"
                                 fi
-                            done
-
-                            # If common-library changed, rebuild all services
-                            if echo ",$CHANGED," | grep -q ",common-library,"; then
-                                echo "common-library changed, rebuilding all services" >&2
-                                CHANGED=$(echo "$SERVICES" | tr " " ",")
                             fi
+                        done
 
-                            echo "$CHANGED"
-                        ''',
-                        returnStdout: true
-                    ).trim()
+                        # If common-library changed, rebuild all services
+                        if echo ",$CHANGED," | grep -q ",common-library,"; then
+                            echo "common-library changed, rebuilding all services"
+                            CHANGED=$(echo "$SERVICES" | tr " " ",")
+                        fi
+
+                        echo "Detected changed services: $CHANGED"
+                        printf "%s" "$CHANGED" > changed_services.txt
+                    '''
+
+                    def changedServicesStr = fileExists('changed_services.txt') \
+                        ? readFile('changed_services.txt').trim() \
+                        : ""
 
                     env.CHANGED_SERVICES = changedServicesStr
                     echo "Changed services: ${env.CHANGED_SERVICES}"
@@ -117,10 +119,10 @@ pipeline {
                             echo "Running Snyk Scan..."
                             withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
                                 sh 'npm install -g snyk'
-                                
+
                                 def services = env.CHANGED_SERVICES.split(",")
                                 def hasJava = false
-                                
+
                                 for (svc in services) {
                                     if (svc == "backoffice") {
                                         sh 'snyk test --file=backoffice/package-lock.json --severity-threshold=high || true'
@@ -130,7 +132,7 @@ pipeline {
                                         hasJava = true
                                     }
                                 }
-                                
+
                                 if (hasJava || services.contains("common-library")) {
                                     sh 'mvn install -DskipTests'
                                     sh 'snyk test --maven-aggregate-project --severity-threshold=high || true'
@@ -150,7 +152,7 @@ pipeline {
                             ]) {
                                 def services = env.CHANGED_SERVICES.split(",")
                                 def hasJava = services.any { it != "backoffice" && it != "storefront" }
-                                
+
                                 if (hasJava || services.contains("common-library")) {
                                     sh 'mvn install -DskipTests'
                                     sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=nashtech-garage_yas-yas-parent'
@@ -208,7 +210,7 @@ pipeline {
                 } catch (Throwable t) {
                     echo "Ignoring error in JUnit reports: ${t.getMessage()}"
                 }
-                
+
                 try {
                     // Coverage
                     publishCoverage adapters: [
