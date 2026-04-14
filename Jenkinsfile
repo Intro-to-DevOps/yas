@@ -19,11 +19,20 @@ pipeline {
                     def output = sh(
                         script: '''
                             git fetch origin +refs/heads/main:refs/remotes/origin/main >/dev/null 2>&1 || true
-                            git diff --name-only origin/main...HEAD
+                            git diff --name-only origin/main...HEAD || true
                         ''',
                         returnStdout: true
                     ).trim()
-                    def changedFiles = output ? output.split("\\n") : []
+                    
+                    echo "--- GIT DIFF OUTPUT ---"
+                    echo output
+                    
+                    if (!output) {
+                        echo "WARNING: origin/main diff empty. Falling back to simple diff-tree between last commits!"
+                        output = sh(script: "git log -m -1 --name-only --pretty=\"format:\"", returnStdout: true).trim()
+                    }
+                    
+                    def changedFiles = output ? output.split("\\r?\\n") : []
 
                     def allServices = [
                         // frontend
