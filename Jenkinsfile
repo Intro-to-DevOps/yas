@@ -16,10 +16,18 @@ pipeline {
         stage('Detect Changed Services') {
             steps {
                 script {
-                    def changedFiles = sh(
-                        script: "git fetch origin main > /dev/null 2>&1 || true; git diff --name-only origin/main...HEAD 2>/dev/null || git diff-tree --no-commit-id --name-only -r HEAD",
+                    def output = sh(
+                        script: '''
+                            git fetch origin main >/dev/null 2>&1 || true
+                            if git diff --name-only origin/main...HEAD >/dev/null 2>&1; then
+                                git diff --name-only origin/main...HEAD
+                            else
+                                git diff-tree --no-commit-id --name-only -r HEAD
+                            fi
+                        ''',
                         returnStdout: true
-                    ).trim().split("\n")
+                    ).trim()
+                    def changedFiles = output ? output.split("\\n") : []
 
                     def allServices = [
                         // frontend
