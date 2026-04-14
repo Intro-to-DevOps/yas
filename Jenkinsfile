@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    environment {
-        CHANGED_SERVICES = ""
-    }
-
     stages {
 
         stage('Checkout') {
@@ -47,16 +43,9 @@ pipeline {
                             CHANGED=$(echo "$SERVICES" | tr " " ",")
                         fi
 
-                        echo "Detected changed services: $CHANGED"
                         printf "%s" "$CHANGED" > changed_services.txt
+                        echo "Changed services: $CHANGED"
                     '''
-
-                    def changedServicesStr = fileExists('changed_services.txt') \
-                        ? readFile('changed_services.txt').trim() \
-                        : ""
-
-                    env.CHANGED_SERVICES = changedServicesStr
-                    echo "Changed services: ${env.CHANGED_SERVICES}"
                 }
             }
         }
@@ -66,31 +55,25 @@ pipeline {
         // =========================
         stage('Test') {
             when {
-                expression { env.CHANGED_SERVICES != null && env.CHANGED_SERVICES != "" }
+                expression {
+                    return fileExists('changed_services.txt') &&
+                           readFile('changed_services.txt').trim() != ''
+                }
             }
             steps {
                 script {
-                    def services = env.CHANGED_SERVICES.split(",")
-
+                    def services = readFile('changed_services.txt').trim().split(',')
                     def jobs = [:]
-
                     for (svc in services) {
-                        jobs[svc] = {
-                            if (svc in ["backoffice", "storefront"]) {
-                                sh """
-                                cd ${svc}
-                                npm ci
-                                npm test -- --coverage
-                                """
+                        def s = svc
+                        jobs[s] = {
+                            if (s in ['backoffice', 'storefront']) {
+                                sh "cd ${s} && npm ci && npm test -- --coverage"
                             } else {
-                                sh """
-                                cd ${svc}
-                                mvn test
-                                """
+                                sh "cd ${s} && mvn test"
                             }
                         }
                     }
-
                     parallel jobs
                 }
             }
@@ -101,13 +84,16 @@ pipeline {
         // =========================
         stage('Security Scan') {
             when {
-                expression { env.CHANGED_SERVICES != null && env.CHANGED_SERVICES != "" }
+                expression {
+                    return fileExists('changed_services.txt') &&
+                           readFile('changed_services.txt').trim() != ''
+                }
             }
             parallel {
                 stage('Gitleaks') {
                     steps {
                         script {
-                            echo "Running Gitleaks Scan..."
+                            echo 'Running Gitleaks Scan...'
                             sh 'docker run --rm -v ${WORKSPACE}:/path zricethezav/gitleaks:latest detect --source /path -v'
                         }
                     }
@@ -116,24 +102,21 @@ pipeline {
                 stage('Snyk Scan') {
                     steps {
                         script {
-                            echo "Running Snyk Scan..."
+                            echo 'Running Snyk Scan...'
                             withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
                                 sh 'npm install -g snyk'
-
-                                def services = env.CHANGED_SERVICES.split(",")
+                                def services = readFile('changed_services.txt').trim().split(',')
                                 def hasJava = false
-
                                 for (svc in services) {
-                                    if (svc == "backoffice") {
+                                    if (svc == 'backoffice') {
                                         sh 'snyk test --file=backoffice/package-lock.json --severity-threshold=high || true'
-                                    } else if (svc == "storefront") {
+                                    } else if (svc == 'storefront') {
                                         sh 'snyk test --file=storefront/package-lock.json --severity-threshold=high || true'
-                                    } else if (svc != "common-library") {
+                                    } else if (svc != 'common-library') {
                                         hasJava = true
                                     }
                                 }
-
-                                if (hasJava || services.contains("common-library")) {
+                                if (hasJava || (services as List).contains('common-library')) {
                                     sh 'mvn install -DskipTests'
                                     sh 'snyk test --maven-aggregate-project --severity-threshold=high || true'
                                 }
@@ -145,15 +128,14 @@ pipeline {
                 stage('SonarQube') {
                     steps {
                         script {
-                            echo "Running SonarCloud Scan..."
+                            echo 'Running SonarCloud Scan...'
                             withCredentials([
                                 string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN'),
                                 string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')
                             ]) {
-                                def services = env.CHANGED_SERVICES.split(",")
-                                def hasJava = services.any { it != "backoffice" && it != "storefront" }
-
-                                if (hasJava || services.contains("common-library")) {
+                                def services = readFile('changed_services.txt').trim().split(',') as List
+                                def hasJava = services.any { it != 'backoffice' && it != 'storefront' }
+                                if (hasJava || services.contains('common-library')) {
                                     sh 'mvn install -DskipTests'
                                     sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=nashtech-garage_yas-yas-parent'
                                 }
@@ -169,32 +151,25 @@ pipeline {
         // =========================
         stage('Build') {
             when {
-                expression { env.CHANGED_SERVICES != null && env.CHANGED_SERVICES != "" }
+                expression {
+                    return fileExists('changed_services.txt') &&
+                           readFile('changed_services.txt').trim() != ''
+                }
             }
             steps {
                 script {
-                    def services = env.CHANGED_SERVICES.split(",")
-
+                    def services = readFile('changed_services.txt').trim().split(',')
                     def jobs = [:]
-
                     for (svc in services) {
-                        jobs[svc] = {
-                            if (svc in ["backoffice", "storefront"]) {
-                                sh """
-                                cd ${svc}
-                                npm run build
-                                docker build -t ${svc}:latest .
-                                """
+                        def s = svc
+                        jobs[s] = {
+                            if (s in ['backoffice', 'storefront']) {
+                                sh "cd ${s} && npm run build && docker build -t ${s}:latest ."
                             } else {
-                                sh """
-                                cd ${svc}
-                                mvn package -DskipTests
-                                docker build -t ${svc}:latest .
-                                """
+                                sh "cd ${s} && mvn package -DskipTests && docker build -t ${s}:latest ."
                             }
                         }
                     }
-
                     parallel jobs
                 }
             }
@@ -205,14 +180,11 @@ pipeline {
         always {
             script {
                 try {
-                    // Java test reports
                     junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
                 } catch (Throwable t) {
                     echo "Ignoring error in JUnit reports: ${t.getMessage()}"
                 }
-
                 try {
-                    // Coverage
                     publishCoverage adapters: [
                         jacocoAdapter('**/target/site/jacoco/jacoco.xml')
                     ]
