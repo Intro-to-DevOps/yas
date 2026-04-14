@@ -1,0 +1,9 @@
+# Pipeline test file — safe, no secrets
+# This file exists to trigger the "product" service in the Detect Changed Services stage.
+# Expected pipeline behavior:
+#   - Gitleaks:              PASS  (no secrets in this PR)
+#   - Detect Changed Services: detects "product"
+#   - Test:                  UNSTABLE (mvn not installed on agent — non-blocking)
+#   - Security Scan:         runs Snyk + SonarQube
+#   - Build:                 SKIPPED (feature branch, not main/develop)
+PIPELINE_TEST=true
