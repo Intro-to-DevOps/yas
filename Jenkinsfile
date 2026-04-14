@@ -66,17 +66,9 @@ pipeline {
                         "delivery"
                     ]
 
-                    def changed = []
-
-                    for (file in changedFiles) {
-                        for (svc in allServices) {
-                            if (file.startsWith("${svc}/")) {
-                                changed.add(svc)
-                            }
-                        }
+                    def changed = allServices.findAll { svc ->
+                        changedFiles.any { file -> file.startsWith("${svc}/") }
                     }
-
-                    changed = changed.unique()
 
                     if (changed.contains("common-library")) {
                         echo "Common library changed → rebuild all services"
@@ -94,7 +86,7 @@ pipeline {
         // =========================
         stage('Test') {
             when {
-                expression { env.CHANGED_SERVICES }
+                expression { env.CHANGED_SERVICES != null && env.CHANGED_SERVICES != "" }
             }
             steps {
                 script {
@@ -129,7 +121,7 @@ pipeline {
         // =========================
         stage('Security Scan') {
             when {
-                expression { env.CHANGED_SERVICES }
+                expression { env.CHANGED_SERVICES != null && env.CHANGED_SERVICES != "" }
             }
             parallel {
                 stage('Gitleaks') {
@@ -197,7 +189,7 @@ pipeline {
         // =========================
         stage('Build') {
             when {
-                expression { env.CHANGED_SERVICES }
+                expression { env.CHANGED_SERVICES != null && env.CHANGED_SERVICES != "" }
             }
             steps {
                 script {
