@@ -16,66 +16,44 @@ pipeline {
         stage('Detect Changed Services') {
             steps {
                 script {
-                    def output = sh(
+                    def changedServicesStr = sh(
                         script: '''
                             git fetch origin +refs/heads/main:refs/remotes/origin/main >/dev/null 2>&1 || true
-                            git diff --name-only origin/main...HEAD || true
+
+                            DIFF=$(git diff --name-only origin/main...HEAD 2>/dev/null || true)
+                            if [ -z "$DIFF" ]; then
+                                echo "WARNING: origin/main diff empty, falling back to last commit files" >&2
+                                DIFF=$(git log -m -1 --name-only --pretty="format:" 2>/dev/null || true)
+                            fi
+
+                            echo "--- GIT DIFF OUTPUT ---" >&2
+                            echo "$DIFF" >&2
+
+                            SERVICES="backoffice storefront backoffice-bff storefront-bff media product cart order rating customer location inventory tax search recommendation promotion payment payment-paypal webhook sampledata common-library delivery"
+
+                            CHANGED=""
+                            for svc in $SERVICES; do
+                                if echo "$DIFF" | grep -qE "^${svc}/"; then
+                                    if [ -z "$CHANGED" ]; then
+                                        CHANGED="$svc"
+                                    else
+                                        CHANGED="$CHANGED,$svc"
+                                    fi
+                                fi
+                            done
+
+                            # If common-library changed, rebuild all services
+                            if echo ",$CHANGED," | grep -q ",common-library,"; then
+                                echo "common-library changed, rebuilding all services" >&2
+                                CHANGED=$(echo "$SERVICES" | tr " " ",")
+                            fi
+
+                            echo "$CHANGED"
                         ''',
                         returnStdout: true
                     ).trim()
-                    
-                    echo "--- GIT DIFF OUTPUT ---"
-                    echo output
-                    
-                    if (!output) {
-                        echo "WARNING: origin/main diff empty. Falling back to simple diff-tree between last commits!"
-                        output = sh(script: "git log -m -1 --name-only --pretty=\"format:\"", returnStdout: true).trim()
-                    }
-                    
-                    def changedFiles = output ? output.split("\\r?\\n") : []
 
-                    def allServices = [
-                        // frontend
-                        "backoffice",
-                        "storefront",
-
-                        // bff
-                        "backoffice-bff",
-                        "storefront-bff",
-
-                        // backend
-                        "media",
-                        "product",
-                        "cart",
-                        "order",
-                        "rating",
-                        "customer",
-                        "location",
-                        "inventory",
-                        "tax",
-                        "search",
-                        "recommendation",
-                        "promotion",
-                        "payment",
-                        "payment-paypal",
-                        "webhook",
-                        "sampledata",
-
-                        // shared
-                        "common-library",
-                        "delivery"
-                    ]
-
-                    def changed = allServices.findAll { svc ->
-                        changedFiles.any { file -> file.startsWith("${svc}/") }
-                    }
-
-                    if (changed.contains("common-library")) {
-                        echo "Common library changed → rebuild all services"
-                        changed = allServices
-                    }
-
-                    env.CHANGED_SERVICES = changed.join(",")
+                    env.CHANGED_SERVICES = changedServicesStr
                     echo "Changed services: ${env.CHANGED_SERVICES}"
                 }
             }
