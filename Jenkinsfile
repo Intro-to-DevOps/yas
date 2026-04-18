@@ -12,6 +12,7 @@ pipeline {
                 checkout scm
             }
         }
+
         stage('Prepare Git') {
             steps {
                 script {
@@ -23,45 +24,24 @@ pipeline {
             }
         }
 
-
         stage('Detect Changed Services') {
             steps {
                 script {
-                    def changedFiles = sh(
-                        script: "git diff --name-only origin/main...HEAD",
+                    def changedFilesRaw = sh(
+                        script: "git diff --name-only origin/main...HEAD || true",
                         returnStdout: true
-                    ).trim().split("\n")
+                    ).trim()
+
+                    def changedFiles = changedFilesRaw ? changedFilesRaw.split("\n") : []
 
                     def allServices = [
-                        // frontend
-                        "backoffice",
-                        "storefront",
-
-                        // bff
-                        "backoffice-bff",
-                        "storefront-bff",
-
-                        // backend
-                        "media",
-                        "product",
-                        "cart",
-                        "order",
-                        "rating",
-                        "customer",
-                        "location",
-                        "inventory",
-                        "tax",
-                        "search",
-                        "recommendation",
-                        "promotion",
-                        "payment",
-                        "payment-paypal",
-                        "webhook",
-                        "sampledata",
-
-                        // shared
-                        "common-library",
-                        "delivery"
+                        "backoffice", "storefront",
+                        "backoffice-bff", "storefront-bff",
+                        "media", "product", "cart", "order", "rating",
+                        "customer", "location", "inventory", "tax",
+                        "search", "recommendation", "promotion",
+                        "payment", "payment-paypal", "webhook", "sampledata",
+                        "common-library", "delivery"
                     ]
 
                     def changed = []
@@ -80,8 +60,8 @@ pipeline {
                         echo "Common library changed → rebuild all services"
                         changed = allServices
                     }
+                    env.CHANGED_SERVICES = changed ? changed.join(",") : ""
 
-                    env.CHANGED_SERVICES = changed.join(",")
                     echo "Changed services: ${env.CHANGED_SERVICES}"
                 }
             }
@@ -92,11 +72,11 @@ pipeline {
         // =========================
         stage('Test') {
             when {
-                expression { env.CHANGED_SERVICES != "" }
+                expression { env.CHANGED_SERVICES?.trim() }
             }
             steps {
                 script {
-                    def services = env.CHANGED_SERVICES.split(",")
+                    def services = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(",") : []
 
                     def jobs = [:]
 
@@ -127,7 +107,7 @@ pipeline {
         // =========================
         stage('Security Scan') {
             when {
-                expression { env.CHANGED_SERVICES != "" }
+                expression { env.CHANGED_SERVICES?.trim() }
             }
             steps {
                 echo "Placeholder for SonarQube, Snyk, Gitleaks"
@@ -139,11 +119,11 @@ pipeline {
         // =========================
         stage('Build') {
             when {
-                expression { env.CHANGED_SERVICES != "" }
+                expression { env.CHANGED_SERVICES?.trim() }
             }
             steps {
                 script {
-                    def services = env.CHANGED_SERVICES.split(",")
+                    def services = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(",") : []
 
                     def jobs = [:]
 
@@ -173,10 +153,8 @@ pipeline {
 
     post {
         always {
-            // Java test reports
-            junit '**/target/surefire-reports/*.xml'
+            junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
 
-            // Coverage
             publishCoverage adapters: [
                 jacocoAdapter('**/target/site/jacoco/jacoco.xml')
             ]
