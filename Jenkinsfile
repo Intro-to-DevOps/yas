@@ -16,7 +16,7 @@ pipeline {
             steps {
                 script {
                     sh """
-                        git fetch --all --prune
+                        git fetch origin main:refs/remotes/origin/main
                         git branch -a
                     """
                 }
