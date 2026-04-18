@@ -12,6 +12,17 @@ pipeline {
                 checkout scm
             }
         }
+        stage('Prepare Git') {
+            steps {
+                script {
+                    sh """
+                        git fetch --all --prune
+                        git branch -a
+                    """
+                }
+            }
+        }
+
 
         stage('Detect Changed Services') {
             steps {
