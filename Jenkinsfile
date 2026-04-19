@@ -27,12 +27,48 @@ pipeline {
         stage('Detect Changed Services') {
             steps {
                 script {
+
+                    echo "========== DEBUG GIT INFO =========="
+
+                    // 🔹 Current branch
+                    def currentBranch = sh(
+                        script: "git rev-parse --abbrev-ref HEAD",
+                        returnStdout: true
+                    ).trim()
+                    echo "Current branch: ${currentBranch}"
+
+                    // 🔹 HEAD commit
+                    def headCommit = sh(
+                        script: "git rev-parse HEAD",
+                        returnStdout: true
+                    ).trim()
+                    echo "HEAD commit: ${headCommit}"
+
+                    // 🔹 origin/main commit
+                    def mainCommit = sh(
+                        script: "git rev-parse origin/main || true",
+                        returnStdout: true
+                    ).trim()
+                    echo "origin/main commit: ${mainCommit}"
+
+                    echo "========== FETCH CHECK =========="
+                    sh "git branch -a"
+                    sh "git remote -v"
+
+                    echo "========== DIFF FILES =========="
+
                     def changedFilesRaw = sh(
                         script: "git diff --name-only origin/main...HEAD || true",
                         returnStdout: true
                     ).trim()
 
-                    def changedFiles = changedFilesRaw ? changedFilesRaw.split("\n") : []
+                    echo "Raw changed files:"
+                    echo "${changedFilesRaw}"
+
+                    def changedFiles = changedFilesRaw ? changedFilesRaw.split("\\n") : []
+
+                    echo "Parsed changed files:"
+                    echo "${changedFiles}"
 
                     def allServices = [
                         "backoffice", "storefront",
@@ -46,22 +82,30 @@ pipeline {
 
                     def changed = []
 
+                    echo "========== MATCH FILE → SERVICE =========="
+
                     for (file in changedFiles) {
+                        echo "Checking file: ${file}"
                         for (svc in allServices) {
                             if (file.startsWith("${svc}/")) {
+                                echo "→ Matched service: ${svc}"
                                 changed.add(svc)
                             }
                         }
                     }
 
+                    echo "Before unique: ${changed}"
                     changed = changed.unique()
+                    echo "After unique: ${changed}"
 
                     if (changed.contains("common-library")) {
                         echo "Common library changed → rebuild all services"
                         changed = allServices
                     }
+
                     env.CHANGED_SERVICES = changed ? changed.join(",") : ""
 
+                    echo "========== FINAL RESULT =========="
                     echo "Changed services: ${env.CHANGED_SERVICES}"
                 }
             }
