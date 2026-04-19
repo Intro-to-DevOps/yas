@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        CHANGED_SERVICES = ""
+        
     }
 
     stages {
@@ -102,7 +102,6 @@ pipeline {
                         changed = allServices
                     }
 
-                    // ✅ FIX 3: tránh null bug trong Jenkins
                     def result = changed.join(",")
 
                     env.CHANGED_SERVICES = result.toString()
@@ -111,7 +110,7 @@ pipeline {
                         env.CHANGED_SERVICES = ""
                     }
                     echo "========== FINAL RESULT =========="
-                    echo "Changed services: ${env.CHANGED_SERVICES}"
+                    echo "Changed services: ${CHANGED_SERVICES}"
                 }
             }
         }
