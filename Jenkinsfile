@@ -24,27 +24,24 @@ pipeline {
             }
         }
 
-        stage('Detect Changed Services') {
+       stage('Detect Changed Services') {
             steps {
                 script {
 
                     echo "========== DEBUG GIT INFO =========="
 
-                    // 🔹 Current branch
                     def currentBranch = sh(
                         script: "git rev-parse --abbrev-ref HEAD",
                         returnStdout: true
                     ).trim()
                     echo "Current branch: ${currentBranch}"
 
-                    // 🔹 HEAD commit
                     def headCommit = sh(
                         script: "git rev-parse HEAD",
                         returnStdout: true
                     ).trim()
                     echo "HEAD commit: ${headCommit}"
 
-                    // 🔹 origin/main commit
                     def mainCommit = sh(
                         script: "git rev-parse origin/main || true",
                         returnStdout: true
@@ -57,8 +54,9 @@ pipeline {
 
                     echo "========== DIFF FILES =========="
 
+                    // ✅ FIX 1: dùng .. thay vì ...
                     def changedFilesRaw = sh(
-                        script: "git diff --name-only origin/main...HEAD || true",
+                        script: "git diff --name-only origin/main..HEAD || true",
                         returnStdout: true
                     ).trim()
 
@@ -87,7 +85,8 @@ pipeline {
                     for (file in changedFiles) {
                         echo "Checking file: ${file}"
                         for (svc in allServices) {
-                            if (file.startsWith("${svc}/")) {
+                            // ✅ FIX 2: match linh hoạt hơn
+                            if (file.startsWith("${svc}/") || file.contains("/${svc}/")) {
                                 echo "→ Matched service: ${svc}"
                                 changed.add(svc)
                             }
@@ -103,7 +102,9 @@ pipeline {
                         changed = allServices
                     }
 
-                    env.CHANGED_SERVICES = changed ? changed.join(",") : ""
+                    // ✅ FIX 3: tránh null bug trong Jenkins
+                    def result = (changed ?: []).join(",")
+                    env.CHANGED_SERVICES = result ?: ""
 
                     echo "========== FINAL RESULT =========="
                     echo "Changed services: ${env.CHANGED_SERVICES}"
