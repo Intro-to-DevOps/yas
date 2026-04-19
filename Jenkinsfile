@@ -103,11 +103,13 @@ pipeline {
                     }
 
                     // ✅ FIX 3: tránh null bug trong Jenkins
-                    def result = (changed ?: []).join(",")
-                    env.CHANGED_SERVICES = result ?: ""
+                    def result = changed.join(",")
 
-                    echo "========== FINAL RESULT =========="
-                    echo "Changed services: ${env.CHANGED_SERVICES}"
+                    env.CHANGED_SERVICES = result.toString()
+
+                    if (!env.CHANGED_SERVICES?.trim()) {
+                        env.CHANGED_SERVICES = ""
+                    }
                 }
             }
         }
