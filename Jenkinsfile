@@ -110,6 +110,8 @@ pipeline {
                     if (!env.CHANGED_SERVICES?.trim()) {
                         env.CHANGED_SERVICES = ""
                     }
+                    echo "========== FINAL RESULT =========="
+                    echo "Changed services: ${env.CHANGED_SERVICES}"
                 }
             }
         }
