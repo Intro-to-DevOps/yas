@@ -26,25 +26,25 @@ pipeline {
             steps {
                 script {
 
-                    echo "========== DEBUG GIT INFO =========="
+                   
 
                     def currentBranch = sh(
                         script: "git rev-parse --abbrev-ref HEAD",
                         returnStdout: true
                     ).trim()
-                    echo "Current branch: ${currentBranch}"
+                   
 
                     def headCommit = sh(
                         script: "git rev-parse HEAD",
                         returnStdout: true
                     ).trim()
-                    echo "HEAD commit: ${headCommit}"
+                   
 
                     def mainCommit = sh(
                         script: "git rev-parse origin/main || true",
                         returnStdout: true
                     ).trim()
-                    echo "origin/main commit: ${mainCommit}"
+                    
 
                     echo "========== FETCH CHECK =========="
                     sh "git branch -a"
@@ -52,19 +52,13 @@ pipeline {
 
                     echo "========== DIFF FILES =========="
 
-                    // ✅ FIX 1: dùng .. thay vì ...
+                   
                     def changedFilesRaw = sh(
                         script: "git diff --name-only origin/main..HEAD || true",
                         returnStdout: true
                     ).trim()
 
-                    echo "Raw changed files:"
-                    echo "${changedFilesRaw}"
-
                     def changedFiles = changedFilesRaw ? changedFilesRaw.split("\\n") : []
-
-                    echo "Parsed changed files:"
-                    echo "${changedFiles}"
 
                     def allServices = [
                         "backoffice", "storefront",
@@ -78,12 +72,11 @@ pipeline {
 
                     def changed = []
 
-                    echo "========== MATCH FILE → SERVICE =========="
+                  
 
                     for (file in changedFiles) {
                         echo "Checking file: ${file}"
                         for (svc in allServices) {
-                            // ✅ FIX 2: match linh hoạt hơn
                             if (file.startsWith("${svc}/") || file.contains("/${svc}/")) {
                                 echo "→ Matched service: ${svc}"
                                 changed.add(svc)
@@ -91,9 +84,9 @@ pipeline {
                         }
                     }
 
-                    echo "Before unique: ${changed}"
+                    
                     changed = changed.unique()
-                    echo "After unique: ${changed}"
+                    
 
                     if (changed.contains("common-library")) {
                         echo "Common library changed → rebuild all services"
