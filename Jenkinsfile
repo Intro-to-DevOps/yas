@@ -1,7 +1,10 @@
 pipeline {
     agent any
 
-  
+    tools {
+        maven 'maven'
+        nodejs 'NodeJS'
+    }
 
     stages {
 
@@ -124,11 +127,14 @@ pipeline {
                         jobs[currentSvc] = {
                             if (currentSvc in ["backoffice", "storefront"]) {
                                 sh """
-                                docker run --rm -v \${WORKSPACE}:/workspace -w /workspace/${currentSvc} node:20 bash -c 'npm ci && npm test -- --coverage'
+                                cd ${currentSvc}
+                                npm ci
+                                npm test -- --coverage
                                 """
                             } else {
                                 sh """
-                                docker run --rm -v \${WORKSPACE}:/workspace -v maven-repo:/root/.m2 -w /workspace/${currentSvc} maven:3.9.6-eclipse-temurin-21 mvn test
+                                cd ${currentSvc}
+                                mvn test
                                 """
                             }
                         }
@@ -167,20 +173,15 @@ pipeline {
                                 if (currentSvc in ["backoffice", "storefront"]) {
                                     withSonarQubeEnv('sonarcloud') {
                                         sh """
-                                        docker run --rm -v \${WORKSPACE}:/usr/src -w /usr/src/${currentSvc} \
-                                          -e SONAR_HOST_URL=\$SONAR_HOST_URL \
-                                          -e SONAR_AUTH_TOKEN=\$SONAR_AUTH_TOKEN \
-                                          sonarsource/sonar-scanner-cli \
-                                          sonar-scanner -Dsonar.projectKey=nashtech-garage_yas_${currentSvc} -Dsonar.sources=.
+                                        cd ${currentSvc}
+                                        sonar-scanner -Dsonar.projectKey=nashtech-garage_yas_${currentSvc} -Dsonar.sources=.
                                         """
                                     }
                                 } else {
                                     withSonarQubeEnv('sonarcloud') {
                                         sh """
-                                        docker run --rm -v \${WORKSPACE}:/workspace -v maven-repo:/root/.m2 -w /workspace/${currentSvc} \
-                                          -e SONAR_HOST_URL=\$SONAR_HOST_URL \
-                                          -e SONAR_AUTH_TOKEN=\$SONAR_AUTH_TOKEN \
-                                          maven:3.9.6-eclipse-temurin-21 mvn sonar:sonar
+                                        cd ${currentSvc}
+                                        mvn sonar:sonar
                                         """
                                     }
                                 }
@@ -193,11 +194,13 @@ pipeline {
                                 withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                                     if (currentSvc in ["backoffice", "storefront"]) {
                                         sh """
-                                        docker run --rm -v \${WORKSPACE}:/app -w /app/${currentSvc} -e SNYK_TOKEN=\$SNYK_TOKEN snyk/snyk:node snyk test
+                                        cd ${currentSvc}
+                                        npx snyk test
                                         """
                                     } else {
                                         sh """
-                                        docker run --rm -v \${WORKSPACE}:/app -v maven-repo:/root/.m2 -w /app/${currentSvc} -e SNYK_TOKEN=\$SNYK_TOKEN snyk/snyk:maven-3-jdk-21 snyk test --all-projects
+                                        cd ${currentSvc}
+                                        npx snyk test --all-projects
                                         """
                                     }
                                 }
@@ -229,14 +232,14 @@ pipeline {
                         jobs[currentSvc] = {
                             if (currentSvc in ["backoffice", "storefront"]) {
                                 sh """
-                                docker run --rm -v \${WORKSPACE}:/workspace -w /workspace/${currentSvc} node:20 npm run build
                                 cd ${currentSvc}
+                                npm run build
                                 docker build -t ${currentSvc}:latest .
                                 """
                             } else {
                                 sh """
-                                docker run --rm -v \${WORKSPACE}:/workspace -v maven-repo:/root/.m2 -w /workspace/${currentSvc} maven:3.9.6-eclipse-temurin-21 mvn package -DskipTests
                                 cd ${currentSvc}
+                                mvn package -DskipTests
                                 docker build -t ${currentSvc}:latest .
                                 """
                             }
