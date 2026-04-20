@@ -1,7 +1,10 @@
 pipeline {
     agent any
 
-  
+    tools {
+        maven 'maven'
+        nodejs 'NodeJS'
+    }
 
     stages {
 
@@ -107,6 +110,28 @@ pipeline {
         }
 
         // =========================
+        // PREPARE DEPENDENCIES
+        // =========================
+        stage('Prepare Dependencies') {
+            when {
+                expression { env.CHANGED_SERVICES?.trim() }
+            }
+            steps {
+                script {
+                    def services = env.CHANGED_SERVICES.split(",")
+                    def hasMaven = services.any { !(it in ["backoffice", "storefront"]) }
+                    
+                    if (hasMaven) {
+                        echo "=========================================================="
+                        echo "[PREPARE] INSTALLING MAVEN DEPENDENCIES TO LOCAL REPO"
+                        echo "=========================================================="
+                        sh "mvn install -DskipTests"
+                    }
+                }
+            }
+        }
+
+        // =========================
         // TEST PHASE
         // =========================
         stage('Test') {
@@ -120,16 +145,17 @@ pipeline {
                     def jobs = [:]
 
                     for (svc in services) {
-                        jobs[svc] = {
-                            if (svc in ["backoffice", "storefront"]) {
+                        def currentSvc = svc
+                        jobs[currentSvc] = {
+                            if (currentSvc in ["backoffice", "storefront"]) {
                                 sh """
-                                cd ${svc}
+                                cd ${currentSvc}
                                 npm ci
                                 npm test -- --coverage
                                 """
                             } else {
                                 sh """
-                                cd ${svc}
+                                cd ${currentSvc}
                                 mvn test
                                 """
                             }
@@ -149,7 +175,79 @@ pipeline {
                 expression { env.CHANGED_SERVICES?.trim() }
             }
             steps {
-                echo "Placeholder for SonarQube, Snyk, Gitleaks"
+                script {
+                    def services = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(",") : []
+                    def securityJobs = [:]
+
+                    securityJobs['Gitleaks'] = {
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                            sh """
+                            echo "=========================================================="
+                            echo "[SECURITY] STARTING GITLEAKS SCAN (origin/main..HEAD)"
+                            echo "=========================================================="
+                            wget -qO- https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar xz
+                            ./gitleaks detect --log-opts="origin/main..HEAD" --verbose
+                            """
+                        }
+                    }
+
+                    for (svc in services) {
+                        def currentSvc = svc
+
+                        securityJobs["SonarCloud-${currentSvc}"] = {
+                            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+                                    if (currentSvc in ["backoffice", "storefront"]) {
+                                        sh """
+                                        echo "=========================================================="
+                                        echo "[SECURITY] STARTING SONARCLOUD SCAN (JS/NPM): ${currentSvc}"
+                                        echo "=========================================================="
+                                        cd ${currentSvc}
+                                        sonar-scanner -Dsonar.projectKey=nashtech-garage_yas_${currentSvc} -Dsonar.sources=. -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN
+                                        """
+                                    } else {
+                                        sh """
+                                        echo "=========================================================="
+                                        echo "[SECURITY] STARTING SONARCLOUD SCAN (MAVEN): ${currentSvc}"
+                                        echo "=========================================================="
+                                        cd ${currentSvc}
+                                        mvn sonar:sonar -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN
+                                        """
+                                    }
+                                }
+                            }
+                        }
+
+                        securityJobs["Snyk-${currentSvc}"] = {
+                            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                                withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
+                                    if (currentSvc in ["backoffice", "storefront"]) {
+                                        sh """
+                                        echo "=========================================================="
+                                        echo "[SECURITY] STARTING SNYK VULNERABILITY SCAN (NPM): ${currentSvc}"
+                                        echo "=========================================================="
+                                        cd ${currentSvc}
+                                        npx snyk test
+                                        """
+                                    } else {
+                                        sh """
+                                        echo "=========================================================="
+                                        echo "[SECURITY] STARTING SNYK VULNERABILITY SCAN (MAVEN): ${currentSvc}"
+                                        echo "=========================================================="
+                                        cd ${currentSvc}
+                                        npx snyk test
+                                        """
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+
+
+                    // Execute security scans in parallel
+                    parallel securityJobs
+                }
             }
         }
 
@@ -167,18 +265,19 @@ pipeline {
                     def jobs = [:]
 
                     for (svc in services) {
-                        jobs[svc] = {
-                            if (svc in ["backoffice", "storefront"]) {
+                        def currentSvc = svc
+                        jobs[currentSvc] = {
+                            if (currentSvc in ["backoffice", "storefront"]) {
                                 sh """
-                                cd ${svc}
+                                cd ${currentSvc}
                                 npm run build
-                                docker build -t ${svc}:latest .
+                                docker build -t ${currentSvc}:latest .
                                 """
                             } else {
                                 sh """
-                                cd ${svc}
+                                cd ${currentSvc}
                                 mvn package -DskipTests
-                                docker build -t ${svc}:latest .
+                                docker build -t ${currentSvc}:latest .
                                 """
                             }
                         }
