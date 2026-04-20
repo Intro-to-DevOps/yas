@@ -161,7 +161,11 @@ pipeline {
                     // Gitleaks Scan for global repository (Week 2 task)
                     securityJobs['Gitleaks'] = {
                         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                            sh 'docker run --rm -v ${WORKSPACE}:/work -w /work zricethezav/gitleaks:v8.18.4 detect --source="." --verbose --no-git'
+                            // Tải trực tiếp file chạy Gitleaks (phiên bản 8.18.4) thay vì gọi qua Docker để né lỗi Permission denied
+                            sh """
+                            wget -qO- https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar xz
+                            ./gitleaks detect --source="." --verbose --no-git
+                            """
                         }
                     }
 
