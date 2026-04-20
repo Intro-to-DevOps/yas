@@ -163,6 +163,9 @@ pipeline {
                         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                             // Tải trực tiếp file chạy Gitleaks (phiên bản 8.18.4) thay vì gọi qua Docker để né lỗi Permission denied
                             sh """
+                            echo "=========================================================="
+                            echo "[SECURITY] STARTING GITLEAKS SCAN (origin/main..HEAD)"
+                            echo "=========================================================="
                             wget -qO- https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar xz
                             ./gitleaks detect --log-opts="origin/main..HEAD" --verbose
                             """
@@ -175,18 +178,23 @@ pipeline {
                         // SonarCloud Scan per service (Week 3 task)
                         securityJobs["SonarCloud-${currentSvc}"] = {
                             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                                if (currentSvc in ["backoffice", "storefront"]) {
-                                    withSonarQubeEnv('sonarcloud') {
+                                // Gọi thẳng qua token thay vì dùng khối withSonarQubeEnv để né lỗi không thấy tên cài đặt
+                                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+                                    if (currentSvc in ["backoffice", "storefront"]) {
                                         sh """
+                                        echo "=========================================================="
+                                        echo "[SECURITY] STARTING SONARCLOUD SCAN (JS/NPM): ${currentSvc}"
+                                        echo "=========================================================="
                                         cd ${currentSvc}
-                                        sonar-scanner -Dsonar.projectKey=nashtech-garage_yas_${currentSvc} -Dsonar.sources=.
+                                        sonar-scanner -Dsonar.projectKey=nashtech-garage_yas_${currentSvc} -Dsonar.sources=. -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN
                                         """
-                                    }
-                                } else {
-                                    withSonarQubeEnv('sonarcloud') {
+                                    } else {
                                         sh """
+                                        echo "=========================================================="
+                                        echo "[SECURITY] STARTING SONARCLOUD SCAN (MAVEN): ${currentSvc}"
+                                        echo "=========================================================="
                                         cd ${currentSvc}
-                                        mvn sonar:sonar
+                                        mvn sonar:sonar -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN
                                         """
                                     }
                                 }
@@ -196,14 +204,21 @@ pipeline {
                         // Snyk Scan per service (Week 3 task)
                         securityJobs["Snyk-${currentSvc}"] = {
                             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                                withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+                                // Thay tên credentials sang SNYK_TOKEN theo như config trên Jenkins của bạn
+                                withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
                                     if (currentSvc in ["backoffice", "storefront"]) {
                                         sh """
+                                        echo "=========================================================="
+                                        echo "[SECURITY] STARTING SNYK VULNERABILITY SCAN (NPM): ${currentSvc}"
+                                        echo "=========================================================="
                                         cd ${currentSvc}
                                         npx snyk test
                                         """
                                     } else {
                                         sh """
+                                        echo "=========================================================="
+                                        echo "[SECURITY] STARTING SNYK VULNERABILITY SCAN (MAVEN): ${currentSvc}"
+                                        echo "=========================================================="
                                         cd ${currentSvc}
                                         npx snyk test --all-projects
                                         """
