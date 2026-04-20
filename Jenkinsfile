@@ -110,11 +110,33 @@ pipeline {
         }
 
         // =========================
+        // PREPARE DEPENDENCIES
+        // =========================
+        stage('Prepare Dependencies') {
+            when {
+                expression { env.CHANGED_SERVICES?.trim() }
+            }
+            steps {
+                script {
+                    def services = env.CHANGED_SERVICES.split(",")
+                    def hasMaven = services.any { !(it in ["backoffice", "storefront"]) }
+                    
+                    if (hasMaven) {
+                        echo "=========================================================="
+                        echo "[PREPARE] INSTALLING MAVEN DEPENDENCIES TO LOCAL REPO"
+                        echo "=========================================================="
+                        sh "mvn install -DskipTests"
+                    }
+                }
+            }
+        }
+
+        // =========================
         // TEST PHASE
         // =========================
         stage('Test') {
             when {
-                // Tạm thời vô hiệu hóa để Tuần 2,3 test Security nhanh hơn
+                // Tạm thời vô hiệu hóa để test Security Scan nhanh hơn
                 expression { false }
             }
             steps {
@@ -158,10 +180,8 @@ pipeline {
                     def services = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(",") : []
                     def securityJobs = [:]
 
-                    // Gitleaks Scan for global repository (Week 2 task)
                     securityJobs['Gitleaks'] = {
                         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                            // Tải trực tiếp file chạy Gitleaks (phiên bản 8.18.4) thay vì gọi qua Docker để né lỗi Permission denied
                             sh """
                             echo "=========================================================="
                             echo "[SECURITY] STARTING GITLEAKS SCAN (origin/main..HEAD)"
@@ -175,10 +195,8 @@ pipeline {
                     for (svc in services) {
                         def currentSvc = svc
 
-                        // SonarCloud Scan per service (Week 3 task)
                         securityJobs["SonarCloud-${currentSvc}"] = {
                             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                                // Gọi thẳng qua token thay vì dùng khối withSonarQubeEnv để né lỗi không thấy tên cài đặt
                                 withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
                                     if (currentSvc in ["backoffice", "storefront"]) {
                                         sh """
@@ -201,10 +219,8 @@ pipeline {
                             }
                         }
 
-                        // Snyk Scan per service (Week 3 task)
                         securityJobs["Snyk-${currentSvc}"] = {
                             catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                                // Thay tên credentials sang SNYK_TOKEN theo như config trên Jenkins của bạn
                                 withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
                                     if (currentSvc in ["backoffice", "storefront"]) {
                                         sh """
@@ -220,9 +236,7 @@ pipeline {
                                         echo "[SECURITY] STARTING SNYK VULNERABILITY SCAN (MAVEN): ${currentSvc}"
                                         echo "=========================================================="
                                         cd ${currentSvc}
-                                        mvn -v
-                                        java -version
-                                        npx snyk test --debug
+                                        npx snyk test
                                         """
                                     }
                                 }
@@ -230,21 +244,7 @@ pipeline {
                         }
                     }
 
-                    // --- TIỀN XỬ LÝ DEPENDENCIES TRƯỚC KHI QUÉT SONG SONG ---
-                    // Vì chúng ta đã bỏ qua bước Test/Build, các thư viện dùng chung (như common-library) chưa được cài đặt.
-                    // Bước này bắt buộc phải cài (install) chúng cục bộ để Sonar và Snyk có thể Resolve được Code.
-                    for (svc in services) {
-                        def currentSvc = svc
-                        if (currentSvc in ["backoffice", "storefront"]) {
-                            sh """
-                            cd ${currentSvc}
-                            npm install --legacy-peer-deps
-                            """
-                        } else {
-                            // Chỉ build module hiện tại và các module mà nó phụ thuộc (vd: common-library)
-                            sh "mvn install -pl ${currentSvc} -am -DskipTests"
-                        }
-                    }
+
 
                     // Execute security scans in parallel
                     parallel securityJobs
@@ -257,8 +257,7 @@ pipeline {
         // =========================
         stage('Build') {
             when {
-                // Tạm thời vô hiệu hóa để tránh build docker tốn thời gian
-                expression { false }
+                expression { env.CHANGED_SERVICES?.trim() }
             }
             steps {
                 script {
