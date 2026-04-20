@@ -149,7 +149,64 @@ pipeline {
                 expression { env.CHANGED_SERVICES?.trim() }
             }
             steps {
-                echo "Placeholder for SonarQube, Snyk, Gitleaks"
+                script {
+                    def services = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(",") : []
+                    def securityJobs = [:]
+
+                    // Gitleaks Scan for global repository (Week 2 task)
+                    securityJobs['Gitleaks'] = {
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                            sh 'docker run --rm -v ${WORKSPACE}:/work -w /work zricethezav/gitleaks:v8.18.4 detect --source="." --verbose --no-git'
+                        }
+                    }
+
+                    for (svc in services) {
+                        def currentSvc = svc
+
+                        // SonarCloud Scan per service (Week 3 task)
+                        securityJobs["SonarCloud-${currentSvc}"] = {
+                            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                                if (currentSvc in ["backoffice", "storefront"]) {
+                                    withSonarQubeEnv('sonarcloud') {
+                                        sh """
+                                        cd ${currentSvc}
+                                        sonar-scanner -Dsonar.projectKey=nashtech-garage_yas_${currentSvc} -Dsonar.sources=.
+                                        """
+                                    }
+                                } else {
+                                    withSonarQubeEnv('sonarcloud') {
+                                        sh """
+                                        cd ${currentSvc}
+                                        mvn sonar:sonar
+                                        """
+                                    }
+                                }
+                            }
+                        }
+
+                        // Snyk Scan per service (Week 3 task)
+                        securityJobs["Snyk-${currentSvc}"] = {
+                            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                                withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+                                    if (currentSvc in ["backoffice", "storefront"]) {
+                                        sh """
+                                        cd ${currentSvc}
+                                        npx snyk test
+                                        """
+                                    } else {
+                                        sh """
+                                        cd ${currentSvc}
+                                        snyk test --all-projects
+                                        """
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Execute security scans in parallel
+                    parallel securityJobs
+                }
             }
         }
 
