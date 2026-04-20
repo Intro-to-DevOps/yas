@@ -220,7 +220,9 @@ pipeline {
                                         echo "[SECURITY] STARTING SNYK VULNERABILITY SCAN (MAVEN): ${currentSvc}"
                                         echo "=========================================================="
                                         cd ${currentSvc}
-                                        npx snyk test --all-projects
+                                        mvn -v
+                                        java -version
+                                        npx snyk test --debug
                                         """
                                     }
                                 }
