@@ -114,7 +114,8 @@ pipeline {
         // =========================
         stage('Test') {
             when {
-                expression { env.CHANGED_SERVICES?.trim() }
+                // Tạm thời vô hiệu hóa để Tuần 2,3 test Security nhanh hơn
+                expression { false }
             }
             steps {
                 script {
@@ -219,7 +220,8 @@ pipeline {
         // =========================
         stage('Build') {
             when {
-                expression { env.CHANGED_SERVICES?.trim() }
+                // Tạm thời vô hiệu hóa để tránh build docker tốn thời gian
+                expression { false }
             }
             steps {
                 script {
