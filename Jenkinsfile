@@ -228,6 +228,22 @@ pipeline {
                         }
                     }
 
+                    // --- TIỀN XỬ LÝ DEPENDENCIES TRƯỚC KHI QUÉT SONG SONG ---
+                    // Vì chúng ta đã bỏ qua bước Test/Build, các thư viện dùng chung (như common-library) chưa được cài đặt.
+                    // Bước này bắt buộc phải cài (install) chúng cục bộ để Sonar và Snyk có thể Resolve được Code.
+                    for (svc in services) {
+                        def currentSvc = svc
+                        if (currentSvc in ["backoffice", "storefront"]) {
+                            sh """
+                            cd ${currentSvc}
+                            npm install --legacy-peer-deps
+                            """
+                        } else {
+                            // Chỉ build module hiện tại và các module mà nó phụ thuộc (vd: common-library)
+                            sh "mvn install -pl ${currentSvc} -am -DskipTests"
+                        }
+                    }
+
                     // Execute security scans in parallel
                     parallel securityJobs
                 }
