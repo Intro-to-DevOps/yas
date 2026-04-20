@@ -120,17 +120,15 @@ pipeline {
                     def jobs = [:]
 
                     for (svc in services) {
-                        jobs[svc] = {
-                            if (svc in ["backoffice", "storefront"]) {
+                        def currentSvc = svc
+                        jobs[currentSvc] = {
+                            if (currentSvc in ["backoffice", "storefront"]) {
                                 sh """
-                                cd ${svc}
-                                npm ci
-                                npm test -- --coverage
+                                docker run --rm -v \${WORKSPACE}:/workspace -w /workspace/${currentSvc} node:20 bash -c 'npm ci && npm test -- --coverage'
                                 """
                             } else {
                                 sh """
-                                cd ${svc}
-                                mvn test
+                                docker run --rm -v \${WORKSPACE}:/workspace -v maven-repo:/root/.m2 -w /workspace/${currentSvc} maven:3.9.6-eclipse-temurin-21 mvn test
                                 """
                             }
                         }
@@ -169,15 +167,20 @@ pipeline {
                                 if (currentSvc in ["backoffice", "storefront"]) {
                                     withSonarQubeEnv('sonarcloud') {
                                         sh """
-                                        cd ${currentSvc}
-                                        sonar-scanner -Dsonar.projectKey=nashtech-garage_yas_${currentSvc} -Dsonar.sources=.
+                                        docker run --rm -v \${WORKSPACE}:/usr/src -w /usr/src/${currentSvc} \
+                                          -e SONAR_HOST_URL=\$SONAR_HOST_URL \
+                                          -e SONAR_AUTH_TOKEN=\$SONAR_AUTH_TOKEN \
+                                          sonarsource/sonar-scanner-cli \
+                                          sonar-scanner -Dsonar.projectKey=nashtech-garage_yas_${currentSvc} -Dsonar.sources=.
                                         """
                                     }
                                 } else {
                                     withSonarQubeEnv('sonarcloud') {
                                         sh """
-                                        cd ${currentSvc}
-                                        mvn sonar:sonar
+                                        docker run --rm -v \${WORKSPACE}:/workspace -v maven-repo:/root/.m2 -w /workspace/${currentSvc} \
+                                          -e SONAR_HOST_URL=\$SONAR_HOST_URL \
+                                          -e SONAR_AUTH_TOKEN=\$SONAR_AUTH_TOKEN \
+                                          maven:3.9.6-eclipse-temurin-21 mvn sonar:sonar
                                         """
                                     }
                                 }
@@ -190,13 +193,11 @@ pipeline {
                                 withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                                     if (currentSvc in ["backoffice", "storefront"]) {
                                         sh """
-                                        cd ${currentSvc}
-                                        npx snyk test
+                                        docker run --rm -v \${WORKSPACE}:/app -w /app/${currentSvc} -e SNYK_TOKEN=\$SNYK_TOKEN snyk/snyk:node snyk test
                                         """
                                     } else {
                                         sh """
-                                        cd ${currentSvc}
-                                        snyk test --all-projects
+                                        docker run --rm -v \${WORKSPACE}:/app -v maven-repo:/root/.m2 -w /app/${currentSvc} -e SNYK_TOKEN=\$SNYK_TOKEN snyk/snyk:maven-3-jdk-21 snyk test --all-projects
                                         """
                                     }
                                 }
@@ -224,18 +225,19 @@ pipeline {
                     def jobs = [:]
 
                     for (svc in services) {
-                        jobs[svc] = {
-                            if (svc in ["backoffice", "storefront"]) {
+                        def currentSvc = svc
+                        jobs[currentSvc] = {
+                            if (currentSvc in ["backoffice", "storefront"]) {
                                 sh """
-                                cd ${svc}
-                                npm run build
-                                docker build -t ${svc}:latest .
+                                docker run --rm -v \${WORKSPACE}:/workspace -w /workspace/${currentSvc} node:20 npm run build
+                                cd ${currentSvc}
+                                docker build -t ${currentSvc}:latest .
                                 """
                             } else {
                                 sh """
-                                cd ${svc}
-                                mvn package -DskipTests
-                                docker build -t ${svc}:latest .
+                                docker run --rm -v \${WORKSPACE}:/workspace -v maven-repo:/root/.m2 -w /workspace/${currentSvc} maven:3.9.6-eclipse-temurin-21 mvn package -DskipTests
+                                cd ${currentSvc}
+                                docker build -t ${currentSvc}:latest .
                                 """
                             }
                         }
