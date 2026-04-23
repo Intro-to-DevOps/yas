@@ -130,13 +130,34 @@ pipeline {
                             } else {
                                 sh """
                                 cd ${svc}
-                                mvn test
+                                chmod +x mvnw
+                                ./mvnw -B test jacoco:report -pl ${svc} -am -DskipITs
                                 """
                             }
+
+                            jacoco(
+                                execPattern: "${svc}/target/jacoco.exec",
+                                classPattern: "${svc}/target/classes",
+                                sourcePattern: "${svc}/src/main/java",
+                                minimumInstructionCoverage: '70',
+                                minimumLineCoverage: '70',
+                                minimumBranchCoverage: '70',
+                                minimumInstructionCoverage: '10',
+                                minimumLineCoverage: '10',
+                                minimumBranchCoverage: '10',
+                                changeBuildStatus: true
+                            )
                         }
                     }
 
                     parallel jobs
+                }
+            }
+            post {
+                always {
+                    // Gom tất cả báo cáo JUnit của cả Backend lẫn Frontend (nếu Frontend có cấu hình xuất XML)
+                    junit testResults: '**/target/surefire-reports/*.xml',
+                          allowEmptyResults: true
                 }
             }
         }
