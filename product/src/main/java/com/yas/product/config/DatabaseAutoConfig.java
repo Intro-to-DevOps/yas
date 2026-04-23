@@ -18,6 +18,7 @@ public class DatabaseAutoConfig {
 
     @Bean
     public AuditorAware<String> auditorAware() {
+        int a = 5;
         return () -> {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth == null) {
