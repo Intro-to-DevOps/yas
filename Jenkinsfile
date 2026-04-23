@@ -1,6 +1,9 @@
 pipeline {
     agent any
 
+    tools {
+        jdk 'JDK_25'
+    }
   
 
     stages {
@@ -127,26 +130,26 @@ pipeline {
                                 npm ci
                                 npm test -- --coverage
                                 """
+                                // Lưu ý: Nếu muốn thu thập coverage của Frontend trên Jenkins, 
+                                // bạn cần bổ sung plugin đọc report tương ứng (như Cobertura) ở đây.
                             } else {
                                 sh """
                                 cd ${svc}
                                 chmod +x mvnw
                                 ./mvnw -B test jacoco:report -pl ${svc} -am -DskipITs
                                 """
+                                
+                                // Chỉ gọi plugin Jacoco cho các project Java/Maven
+                                jacoco(
+                                    execPattern: "${svc}/target/jacoco.exec",
+                                    classPattern: "${svc}/target/classes",
+                                    sourcePattern: "${svc}/src/main/java",
+                                    minimumInstructionCoverage: '10',
+                                    minimumLineCoverage: '10',
+                                    minimumBranchCoverage: '10',
+                                    changeBuildStatus: true
+                                )
                             }
-
-                            jacoco(
-                                execPattern: "${svc}/target/jacoco.exec",
-                                classPattern: "${svc}/target/classes",
-                                sourcePattern: "${svc}/src/main/java",
-                                minimumInstructionCoverage: '70',
-                                minimumLineCoverage: '70',
-                                minimumBranchCoverage: '70',
-                                minimumInstructionCoverage: '10',
-                                minimumLineCoverage: '10',
-                                minimumBranchCoverage: '10',
-                                changeBuildStatus: true
-                            )
                         }
                     }
 

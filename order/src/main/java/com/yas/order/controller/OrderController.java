@@ -46,6 +46,7 @@ public class OrderController {
     public ResponseEntity<PaymentOrderStatusVm> updateOrderPaymentStatus(
         @Valid @RequestBody PaymentOrderStatusVm paymentOrderStatusVm
     ) {
+        int a = 0;
         PaymentOrderStatusVm orderStatusVm = orderService.updateOrderPaymentStatus(paymentOrderStatusVm);
         return ResponseEntity.ok(orderStatusVm);
     }
