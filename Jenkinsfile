@@ -134,7 +134,6 @@ pipeline {
                                 // bạn cần bổ sung plugin đọc report tương ứng (như Cobertura) ở đây.
                             } else {
                                 sh """
-                                cd ${svc}
                                 chmod +x mvnw
                                 ./mvnw -B test jacoco:report -pl ${svc} -am -DskipITs
                                 """
