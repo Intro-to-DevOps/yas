@@ -119,47 +119,43 @@ pipeline {
             steps {
                 script {
                     def services = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(",") : []
+                            sh """
+                            chmod +x mvnw
+                            ./mvnw -B install -DskipTests
+                            """
+                            // ---------------------------
 
-                    def jobs = [:]
+                            def jobs = [:]
 
-                    for (svc in services) {
-                        jobs[svc] = {
-                            if (svc in ["backoffice", "storefront"]) {
-                                sh """
-                                cd ${svc}
-                                npm ci
-                                npm test -- --coverage
-                                """
-                                // Lưu ý: Nếu muốn thu thập coverage của Frontend trên Jenkins, 
-                                // bạn cần bổ sung plugin đọc report tương ứng (như Cobertura) ở đây.
-                            } else {
-                                sh """
-                                chmod +x mvnw
-                                ./mvnw -B test jacoco:report -pl ${svc} -am -DskipITs
-                                """
-                                
-                                // Chỉ gọi plugin Jacoco cho các project Java/Maven
-                                jacoco(
-                                    execPattern: "${svc}/target/jacoco.exec",
-                                    classPattern: "${svc}/target/classes",
-                                    sourcePattern: "${svc}/src/main/java",
-                                    minimumInstructionCoverage: '10',
-                                    minimumLineCoverage: '10',
-                                    minimumBranchCoverage: '10',
-                                    changeBuildStatus: true
-                                )
+                            for (svc in services) {
+                                jobs[svc] = {
+                                    if (svc in ["backoffice", "storefront"]) {
+                                        sh """
+                                        cd ${svc}
+                                        npm ci
+                                        npm test -- --coverage
+                                        """
+                                    } else {
+                                        // --- SỬA LẠI LỆNH MAVEN Ở ĐÂY ---
+                                        // Bỏ tham số -am đi, vì dependencies đã được install ở bước trên
+                                        sh """
+                                        ./mvnw -B test jacoco:report -pl ${svc} -DskipITs
+                                        """
+
+                                        jacoco(
+                                            execPattern: "${svc}/target/jacoco.exec",
+                                            classPattern: "${svc}/target/classes",
+                                            sourcePattern: "${svc}/src/main/java",
+                                            minimumInstructionCoverage: '70',
+                                            minimumLineCoverage: '70',
+                                            minimumBranchCoverage: '70',
+                                            changeBuildStatus: true
+                                        )
+                                    }
+                                }
                             }
-                        }
-                    }
 
-                    parallel jobs
-                }
-            }
-            post {
-                always {
-                    // Gom tất cả báo cáo JUnit của cả Backend lẫn Frontend (nếu Frontend có cấu hình xuất XML)
-                    junit testResults: '**/target/surefire-reports/*.xml',
-                          allowEmptyResults: true
+                            parallel jobs
                 }
             }
         }
