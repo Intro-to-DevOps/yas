@@ -113,62 +113,65 @@ pipeline {
         // TEST PHASE
         // =========================
         stage('Test') {
-                    when {
-                        expression { env.CHANGED_SERVICES?.trim() }
-                    }
-                    steps {
-                        script {
+            when {
+                expression { env.CHANGED_SERVICES?.trim() }
+            }
+            steps {
+                script {
                             // 1. Lấy danh sách service, loại bỏ khoảng trắng và loại bỏ các phần tử TRÙNG LẶP (unique)
-                            def rawServices = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(',').collect{ it.trim() } : []
-                            def services = rawServices.unique() // Dòng này giải quyết triệt để lỗi chạy 4 lần
+                    def rawServices = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(',').collect{ it.trim() } : []
+                    def services = rawServices.unique() // Dòng này giải quyết triệt để lỗi chạy 4 lần
 
                             // 2. Phân loại Java và Nodejs (Frontend)
-                            def javaServices = services.findAll { !(it in ['backoffice', 'storefront']) && it != '' }
-                            def nodeServices = services.findAll { it in ['backoffice', 'storefront'] }
+                    def javaServices = services.findAll { !(it in ['backoffice', 'storefront']) && it != '' }
+                    def nodeServices = services.findAll { it in ['backoffice', 'storefront'] }
 
-                            def jobs = [:]
+                    def jobs = [:]
 
                             // 3. Xử lý Java Services: Gom vào 1 lệnh duy nhất!
-                            if (!javaServices.isEmpty()) {
-                                def plArgs = javaServices.join(',') // Ví dụ: "product,cart"
-                                jobs['Java Services Tests'] = {
-                                    sh "chmod +x mvnw"
+                    if (!javaServices.isEmpty()) {
+                        def plArgs = javaServices.join(',') // Ví dụ: "product,cart"
+                        jobs['Java Services Tests'] = {
+                            sh "chmod +x mvnw"
                                     // Mang cờ -am trở lại. Vì chạy trong 1 lệnh, sẽ không có đụng độ (Race Condition) và không lỗi ${revision}
-                                    sh "./mvnw -B test jacoco:report -pl ${plArgs} -am -DskipITs -Dmaven.test.failure.ignore=true"
+                            sh "./mvnw -B test jacoco:report -pl ${plArgs} -am -DskipITs -Dmaven.test.failure.ignore=true"
 
                                     // Gom báo cáo coverage của tất cả module bằng dấu **
-                                    jacoco(
-                                        execPattern: '**/target/jacoco.exec',
-                                        classPattern: '**/target/classes',
-                                        sourcePattern: '**/src/main/java',
-                                        minimumInstructionCoverage: '70',
-                                        minimumLineCoverage: '70',
-                                        minimumBranchCoverage: '70',
-                                        changeBuildStatus: true
-                                    )
-                                }
+                            jacoco(
+                                execPattern: '**/target/jacoco.exec',
+                                classPattern: '**/target/classes',
+                                sourcePattern: '**/src/main/java',
+                                minimumInstructionCoverage: '70',
+                                minimumLineCoverage: '70',
+                                minimumBranchCoverage: '70',
+                                changeBuildStatus: true
+                            )
+                            if (currentBuild.result == 'FAILURE' || currentBuild.result == 'UNSTABLE') {
+                                error("Test coverage below 70%")
                             }
+                        }
+                    }
 
                             // 4. Xử lý Frontend (Node): Vẫn cho chạy song song vì chúng độc lập hoàn toàn
-                            for (nodeSvc in nodeServices) {
-                                def svcName = nodeSvc // Gán vào biến local để tránh lỗi vòng lặp của Groovy
-                                jobs[svcName] = {
-                                    sh """
+                    for (nodeSvc in nodeServices) {
+                        def svcName = nodeSvc // Gán vào biến local để tránh lỗi vòng lặp của Groovy
+                        jobs[svcName] = {
+                            sh """
                                     cd ${svcName}
                                     npm ci
                                     npm test -- --coverage
                                     """
-                                }
-                            }
-
-                            // 5. Chạy parallel
-                            if (jobs.size() > 0) {
-                                parallel jobs
-                            } else {
-                                echo "Không có service nào cần test."
-                            }
                         }
                     }
+
+                            // 5. Chạy parallel
+                    if (jobs.size() > 0) {
+                        parallel jobs
+                    } else {
+                        echo "Không có service nào cần test."
+                    }
+                }
+            }
         }
 
         // =========================
