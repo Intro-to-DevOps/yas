@@ -25,7 +25,7 @@ pipeline {
             }
         }
 
-       stage('Detect Changed Services') {
+        stage('Detect Changed Services') {
             steps {
                 script {
 
@@ -179,7 +179,7 @@ pipeline {
         // =========================
         // BUILD PHASE
         // =========================
-        stage('Build') {
+         stage('Build') {
             when {
                 expression { env.CHANGED_SERVICES?.trim() }
             }
@@ -210,7 +210,7 @@ pipeline {
                     parallel jobs
                 }
             }
-        }
+         }
     }
 
     post {
