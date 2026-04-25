@@ -113,51 +113,61 @@ pipeline {
         // TEST PHASE
         // =========================
         stage('Test') {
-            when {
-                expression { env.CHANGED_SERVICES?.trim() }
-            }
-            steps {
-                script {
-                    def services = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(",") : []
-                            sh """
-                            chmod +x mvnw
-                            ./mvnw -B install -DskipTests
-                            """
-                            // ---------------------------
+                    when {
+                        expression { env.CHANGED_SERVICES?.trim() }
+                    }
+                    steps {
+                        script {
+                            // 1. Lấy danh sách service, loại bỏ khoảng trắng và loại bỏ các phần tử TRÙNG LẶP (unique)
+                            def rawServices = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(',').collect{ it.trim() } : []
+                            def services = rawServices.unique() // Dòng này giải quyết triệt để lỗi chạy 4 lần
+
+                            // 2. Phân loại Java và Nodejs (Frontend)
+                            def javaServices = services.findAll { !(it in ['backoffice', 'storefront']) && it != '' }
+                            def nodeServices = services.findAll { it in ['backoffice', 'storefront'] }
 
                             def jobs = [:]
 
-                            for (svc in services) {
-                                jobs[svc] = {
-                                    if (svc in ["backoffice", "storefront"]) {
-                                        sh """
-                                        cd ${svc}
-                                        npm ci
-                                        npm test -- --coverage
-                                        """
-                                    } else {
-                                        // --- SỬA LẠI LỆNH MAVEN Ở ĐÂY ---
-                                        // Bỏ tham số -am đi, vì dependencies đã được install ở bước trên
-                                        sh """
-                                        ./mvnw -B test jacoco:report -pl ${svc} -DskipITs
-                                        """
+                            // 3. Xử lý Java Services: Gom vào 1 lệnh duy nhất!
+                            if (!javaServices.isEmpty()) {
+                                def plArgs = javaServices.join(',') // Ví dụ: "product,cart"
+                                jobs['Java Services Tests'] = {
+                                    // Mang cờ -am trở lại. Vì chạy trong 1 lệnh, sẽ không có đụng độ (Race Condition) và không lỗi ${revision}
+                                    sh "./mvnw -B test jacoco:report -pl ${plArgs} -am -DskipITs"
 
-                                        jacoco(
-                                            execPattern: "${svc}/target/jacoco.exec",
-                                            classPattern: "${svc}/target/classes",
-                                            sourcePattern: "${svc}/src/main/java",
-                                            minimumInstructionCoverage: '70',
-                                            minimumLineCoverage: '70',
-                                            minimumBranchCoverage: '70',
-                                            changeBuildStatus: true
-                                        )
-                                    }
+                                    // Gom báo cáo coverage của tất cả module bằng dấu **
+                                    jacoco(
+                                        execPattern: '**/target/jacoco.exec',
+                                        classPattern: '**/target/classes',
+                                        sourcePattern: '**/src/main/java',
+                                        minimumInstructionCoverage: '70',
+                                        minimumLineCoverage: '70',
+                                        minimumBranchCoverage: '70',
+                                        changeBuildStatus: true
+                                    )
                                 }
                             }
 
-                            parallel jobs
-                }
-            }
+                            // 4. Xử lý Frontend (Node): Vẫn cho chạy song song vì chúng độc lập hoàn toàn
+                            for (nodeSvc in nodeServices) {
+                                def svcName = nodeSvc // Gán vào biến local để tránh lỗi vòng lặp của Groovy
+                                jobs[svcName] = {
+                                    sh """
+                                    cd ${svcName}
+                                    npm ci
+                                    npm test -- --coverage
+                                    """
+                                }
+                            }
+
+                            // 5. Chạy parallel
+                            if (jobs.size() > 0) {
+                                parallel jobs
+                            } else {
+                                echo "Không có service nào cần test."
+                            }
+                        }
+                    }
         }
 
         // =========================
