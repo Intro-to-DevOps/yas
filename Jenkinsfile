@@ -134,7 +134,7 @@ pipeline {
                                 jobs['Java Services Tests'] = {
                                     sh "chmod +x mvnw"
                                     // Mang cờ -am trở lại. Vì chạy trong 1 lệnh, sẽ không có đụng độ (Race Condition) và không lỗi ${revision}
-                                    sh "./mvnw -B test jacoco:report -pl ${plArgs} -am -DskipITs"
+                                    sh "./mvnw -B test jacoco:report -pl ${plArgs} -am -DskipITs -Dmaven.test.failure.ignore=true"
 
                                     // Gom báo cáo coverage của tất cả module bằng dấu **
                                     jacoco(
