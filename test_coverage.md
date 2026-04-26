@@ -19,17 +19,17 @@ Phạm vi tài liệu:
 ### 2.1 Business service (active)
 
 Dựa trên `docker-compose.yml` và module Maven trong `pom.xml`, các business service đang active:
-- `product`
+- `product` (xong)
 - `media`
-- `customer`
-- `cart`
+- `customer` (xong)
+- `cart` (xong)
 - `rating`
-- `order`
-- `payment`
+- `order` (xong)
+- `payment` (xong)
 - `location`
-- `inventory`
+- `inventory` (xong)
 - `promotion`
-- `tax`
+- `tax` (xong)
 - `search`
 
 Tiêu chí xếp business service:

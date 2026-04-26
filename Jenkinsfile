@@ -209,8 +209,8 @@ pipeline {
                                 """
                             } else {
                                 sh """
-                                cd ${svc}
-                                mvn package -DskipTests
+                                chmod +x mvnw
+                                ./mvnw package -DskipTests
                                 docker build -t ${svc}:latest .
                                 """
                             }
