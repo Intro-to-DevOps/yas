@@ -3,11 +3,11 @@ pipeline {
 
     tools {
         jdk 'JDK_25'
+        maven 'maven'
+        nodejs 'NodeJS'
     }
-  
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -28,26 +28,20 @@ pipeline {
         stage('Detect Changed Services') {
             steps {
                 script {
-
-                   
-
                     def currentBranch = sh(
                         script: "git rev-parse --abbrev-ref HEAD",
                         returnStdout: true
                     ).trim()
-                   
 
                     def headCommit = sh(
                         script: "git rev-parse HEAD",
                         returnStdout: true
                     ).trim()
-                   
 
                     def mainCommit = sh(
                         script: "git rev-parse origin/main || true",
                         returnStdout: true
                     ).trim()
-                    
 
                     echo "========== FETCH CHECK =========="
                     sh "git branch -a"
@@ -55,7 +49,6 @@ pipeline {
 
                     echo "========== DIFF FILES =========="
 
-                   
                     def changedFilesRaw = sh(
                         script: "git diff --name-only origin/main..HEAD || true",
                         returnStdout: true
@@ -75,8 +68,6 @@ pipeline {
 
                     def changed = []
 
-                  
-
                     for (file in changedFiles) {
                         echo "Checking file: ${file}"
                         for (svc in allServices) {
@@ -87,9 +78,7 @@ pipeline {
                         }
                     }
 
-                    
                     changed = changed.unique()
-                    
 
                     if (changed.contains("common-library")) {
                         echo "Common library changed → rebuild all services"
@@ -110,6 +99,29 @@ pipeline {
         }
 
         // =========================
+        // PREPARE DEPENDENCIES
+        // =========================
+        stage('Prepare Dependencies') {
+            when {
+                expression { env.CHANGED_SERVICES?.trim() }
+            }
+            steps {
+                script {
+                    def rawServices = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(',').collect { it.trim() } : []
+                    def services = rawServices.unique()
+                    def hasMaven = services.any { !(it in ["backoffice", "storefront"]) }
+                    
+                    if (hasMaven) {
+                        echo "=========================================================="
+                        echo "[PREPARE] INSTALLING MAVEN DEPENDENCIES TO LOCAL REPO"
+                        echo "=========================================================="
+                        sh "mvn clean install -DskipTests"
+                    }
+                }
+            }
+        }
+
+        // =========================
         // TEST PHASE
         // =========================
         stage('Test') {
@@ -118,25 +130,25 @@ pipeline {
             }
             steps {
                 script {
-                            // 1. Lấy danh sách service, loại bỏ khoảng trắng và loại bỏ các phần tử TRÙNG LẶP (unique)
-                    def rawServices = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(',').collect{ it.trim() } : []
-                    def services = rawServices.unique() // Dòng này giải quyết triệt để lỗi chạy 4 lần
+                    // 1. Get the list of services, trim whitespace, and remove DUPLICATES (unique)
+                    def rawServices = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(',').collect { it.trim() } : []
+                    def services = rawServices.unique() // This completely solves the issue of running multiple times
 
-                            // 2. Phân loại Java và Nodejs (Frontend)
+                    // 2. Categorize Java and NodeJS (Frontend) services
                     def javaServices = services.findAll { !(it in ['backoffice', 'storefront']) && it != '' }
                     def nodeServices = services.findAll { it in ['backoffice', 'storefront'] }
 
                     def jobs = [:]
 
-                            // 3. Xử lý Java Services: Gom vào 1 lệnh duy nhất!
+                    // 3. Process Java Services: Combine into a single command!
                     if (!javaServices.isEmpty()) {
-                        def plArgs = javaServices.join(',') // Ví dụ: "product,cart"
+                        def plArgs = javaServices.join(',') // Example: "product,cart"
                         jobs['Java Services Tests'] = {
                             sh "chmod +x mvnw"
-                                    // Mang cờ -am trở lại. Vì chạy trong 1 lệnh, sẽ không có đụng độ (Race Condition) và không lỗi ${revision}
+                            // Bring back the -am flag. Since we run in a single command, there are no race conditions or ${revision} errors
                             sh "./mvnw -B test jacoco:report -pl ${plArgs} -am -DskipITs -Dmaven.test.failure.ignore=true"
 
-                                    // Gom báo cáo coverage của tất cả module bằng dấu **
+                            // Aggregate coverage reports from all modules using **
                             jacoco(
                                 execPattern: '**/target/jacoco.exec',
                                 classPattern: '**/target/classes',
@@ -152,23 +164,23 @@ pipeline {
                         }
                     }
 
-                            // 4. Xử lý Frontend (Node): Vẫn cho chạy song song vì chúng độc lập hoàn toàn
+                    // 4. Process Frontend (Node): Keep running in parallel as they are completely independent
                     for (nodeSvc in nodeServices) {
-                        def svcName = nodeSvc // Gán vào biến local để tránh lỗi vòng lặp của Groovy
+                        def svcName = nodeSvc // Assign to a local variable to avoid Groovy loop scope issues
                         jobs[svcName] = {
                             sh """
-                                    cd ${svcName}
-                                    npm ci
-                                    npm test -- --coverage
-                                    """
+                                cd ${svcName}
+                                npm ci
+                                npm test -- --coverage
+                            """
                         }
                     }
 
-                            // 5. Chạy parallel
+                    // 5. Execute in parallel
                     if (jobs.size() > 0) {
                         parallel jobs
                     } else {
-                        echo "Không có service nào cần test."
+                        echo "No services to test."
                     }
                 }
             }
@@ -182,20 +194,93 @@ pipeline {
                 expression { env.CHANGED_SERVICES?.trim() }
             }
             steps {
-                echo "Placeholder for SonarQube, Snyk, Gitleaks"
+                script {
+                    def rawServices = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(',').collect { it.trim() } : []
+                    def services = rawServices.unique()
+                    def securityJobs = [:]
+
+                    securityJobs['Gitleaks'] = {
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                            sh """
+                                echo "=========================================================="
+                                echo "[SECURITY] STARTING GITLEAKS SCAN (origin/main..HEAD)"
+                                echo "=========================================================="
+                                curl -sL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar xz
+                                ./gitleaks detect --log-opts="origin/main..HEAD" --verbose
+                            """
+                        }
+                    }
+
+                    for (svc in services) {
+                        def currentSvc = svc
+
+                        securityJobs["SonarCloud-${currentSvc}"] = {
+                            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+                                    if (currentSvc in ["backoffice", "storefront"]) {
+                                        sh """
+                                            echo "=========================================================="
+                                            echo "[SECURITY] STARTING SONARCLOUD SCAN (JS/NPM): ${currentSvc}"
+                                            echo "=========================================================="
+                                            cd ${currentSvc}
+                                            sonar-scanner -Dsonar.projectKey=intro-to-devops_yas-${currentSvc} -Dsonar.organization=intro-to-devops -Dsonar.sources=. -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN
+                                        """
+                                    } else {
+                                        sh """
+                                            echo "=========================================================="
+                                            echo "[SECURITY] STARTING SONARCLOUD SCAN (MAVEN): ${currentSvc}"
+                                            echo "=========================================================="
+                                            cd ${currentSvc}
+                                            mvn sonar:sonar -Dsonar.projectKey=intro-to-devops_yas-${currentSvc} -Dsonar.organization=intro-to-devops -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN
+                                        """
+                                    }
+                                }
+                            }
+                        }
+
+                        securityJobs["Snyk-${currentSvc}"] = {
+                            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                                withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
+                                    if (currentSvc in ["backoffice", "storefront"]) {
+                                        sh """
+                                            echo "=========================================================="
+                                            echo "[SECURITY] STARTING SNYK VULNERABILITY SCAN (NPM): ${currentSvc}"
+                                            echo "=========================================================="
+                                            cd ${currentSvc}
+                                            npx snyk test
+                                        """
+                                    } else {
+                                        sh """
+                                            echo "=========================================================="
+                                            echo "[SECURITY] STARTING SNYK VULNERABILITY SCAN (MAVEN): ${currentSvc}"
+                                            echo "=========================================================="
+                                            chmod +x mvnw || true
+                                            chmod +x ${currentSvc}/mvnw || true
+                                            npx snyk test --file=${currentSvc}/pom.xml --command=mvn
+                                        """
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Execute security scans in parallel
+                    parallel securityJobs
+                }
             }
         }
 
         // =========================
         // BUILD PHASE
         // =========================
-         stage('Build') {
+        stage('Build') {
             when {
                 expression { env.CHANGED_SERVICES?.trim() }
             }
             steps {
                 script {
-                    def services = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(",") : []
+                    def rawServices = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(',').collect { it.trim() } : []
+                    def services = rawServices.unique()
 
                     def jobs = [:]
 
@@ -203,15 +288,16 @@ pipeline {
                         jobs[svc] = {
                             if (svc in ["backoffice", "storefront"]) {
                                 sh """
-                                cd ${svc}
-                                npm run build
-                                docker build -t ${svc}:latest .
+                                    cd ${svc}
+                                    npm run build
+                                    docker build -t ${svc}:latest .
                                 """
                             } else {
                                 sh """
-                                chmod +x mvnw
-                                ./mvnw package -DskipTests
-                                docker build -t ${svc}:latest .
+                                    cd ${svc}
+                                    chmod +x mvnw
+                                    ./mvnw package -DskipTests
+                                    docker build -t ${svc}:latest .
                                 """
                             }
                         }
@@ -220,7 +306,7 @@ pipeline {
                     parallel jobs
                 }
             }
-         }
+        }
     }
 
     post {
