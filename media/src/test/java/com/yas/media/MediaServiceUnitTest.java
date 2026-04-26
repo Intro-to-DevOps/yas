@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,26 +18,29 @@ import com.yas.media.config.YasConfig;
 import com.yas.media.mapper.MediaVmMapper;
 import com.yas.media.model.Media;
 import com.yas.media.model.dto.MediaDto;
-import com.yas.media.model.dto.MediaDto.MediaDtoBuilder;
 import com.yas.media.repository.FileSystemRepository;
 import com.yas.media.repository.MediaRepository;
 import com.yas.media.service.MediaServiceImpl;
 import com.yas.media.viewmodel.MediaPostVm;
 import com.yas.media.viewmodel.MediaVm;
 import com.yas.media.viewmodel.NoFileMediaVm;
+import java.io.ByteArrayInputStream;
 import java.util.List;
 import java.util.Optional;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
+@ExtendWith(MockitoExtension.class)
 class MediaServiceUnitTest {
 
     @Spy
@@ -51,9 +55,6 @@ class MediaServiceUnitTest {
     @Mock
     private YasConfig yasConfig;
 
-    @Mock
-    private MediaDtoBuilder builder;
-
     @InjectMocks
     private MediaServiceImpl mediaService;
 
@@ -61,7 +62,6 @@ class MediaServiceUnitTest {
 
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
         media = new Media();
         media.setId(1L);
         media.setCaption("test");
@@ -85,7 +85,7 @@ class MediaServiceUnitTest {
 
     @Test
     void getMedia_whenMediaNotFound_thenReturnNull() {
-        when(mediaRepository.findById(1L)).thenReturn(Optional.empty());
+        when(mediaRepository.findByIdWithoutFileInReturn(1L)).thenReturn(null);
 
         MediaVm mediaVm = mediaService.getMediaById(1L);
         assertNull(mediaVm);
@@ -93,7 +93,7 @@ class MediaServiceUnitTest {
 
     @Test
     void removeMedia_whenMediaNotFound_thenThrowsNotFoundException() {
-        when(mediaRepository.findById(1L)).thenReturn(Optional.empty());
+        when(mediaRepository.findByIdWithoutFileInReturn(1L)).thenReturn(null);
 
         NotFoundException exception = assertThrows(NotFoundException.class, () -> mediaService.removeMedia(1L));
         assertEquals(String.format("Media %s is not found", 1L), exception.getMessage());
@@ -225,27 +225,57 @@ class MediaServiceUnitTest {
     }
 
     @Test
+    void saveMedia_whenFileNameOverrideHasText_thenTrimAndPersistOverrideName() throws Exception {
+        byte[] pngFileContent = new byte[] {1, 2, 3};
+        MultipartFile multipartFile = new MockMultipartFile(
+            "file",
+            "example.png",
+            "image/png",
+            pngFileContent
+        );
+        MediaPostVm mediaPostVm = new MediaPostVm("media", multipartFile, "  override-name.png  ");
+
+        when(fileSystemRepository.persistFile(anyString(), any())).thenReturn("/tmp/override-name.png");
+        when(mediaRepository.save(any(Media.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Media mediaSave = mediaService.saveMedia(mediaPostVm);
+
+        assertNotNull(mediaSave);
+        assertEquals("media", mediaSave.getCaption());
+        assertEquals("override-name.png", mediaSave.getFileName());
+        assertEquals("image/png", mediaSave.getMediaType());
+    }
+
+    @Test
     void getFile_whenMediaNotFound_thenReturnMediaDto() {
-        MediaDto expectedDto = MediaDto.builder().build();
-        when(mediaRepository.findById(1L)).thenReturn(Optional.ofNullable(null));
-        when(builder.build()).thenReturn(expectedDto);
+        when(mediaRepository.findById(1L)).thenReturn(Optional.empty());
 
         MediaDto mediaDto = mediaService.getFile(1L, "fileName");
 
-        assertEquals(expectedDto.getMediaType(), mediaDto.getMediaType());
-        assertEquals(expectedDto.getContent(), mediaDto.getContent());
+        assertNull(mediaDto.getMediaType());
+        assertNull(mediaDto.getContent());
     }
 
     @Test
     void getFile_whenMediaNameNotMatch_thenReturnMediaDto() {
-        MediaDto expectedDto = MediaDto.builder().build();
         when(mediaRepository.findById(1L)).thenReturn(Optional.ofNullable(media));
-        when(builder.build()).thenReturn(expectedDto);
 
         MediaDto mediaDto = mediaService.getFile(1L, "fileName");
 
-        assertEquals(expectedDto.getMediaType(), mediaDto.getMediaType());
-        assertEquals(expectedDto.getContent(), mediaDto.getContent());
+        assertNull(mediaDto.getMediaType());
+        assertNull(mediaDto.getContent());
+    }
+
+    @Test
+    void getFile_whenMediaExistsAndNameMatches_thenReturnMediaContent() {
+        media.setFilePath("/tmp/file-path");
+        when(mediaRepository.findById(1L)).thenReturn(Optional.of(media));
+        when(fileSystemRepository.getFile("/tmp/file-path")).thenReturn(new ByteArrayInputStream(new byte[] {1, 2, 3}));
+
+        MediaDto mediaDto = mediaService.getFile(1L, "file");
+
+        assertNotNull(mediaDto.getContent());
+        assertEquals(MediaType.valueOf("image/jpeg"), mediaDto.getMediaType());
     }
 
     @Test

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,11 +16,13 @@ import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.order.mapper.CheckoutMapperImpl;
 import com.yas.order.model.Checkout;
 import com.yas.order.model.CheckoutItem;
+import com.yas.order.model.Order;
 import com.yas.order.model.enumeration.CheckoutState;
 import com.yas.order.repository.CheckoutItemRepository;
 import com.yas.order.repository.CheckoutRepository;
 import com.yas.order.viewmodel.checkout.CheckoutPaymentMethodPutVm;
 import com.yas.order.viewmodel.checkout.CheckoutPostVm;
+import com.yas.order.viewmodel.checkout.CheckoutStatusPutVm;
 import com.yas.order.viewmodel.product.ProductCheckoutListVm;
 import com.yas.order.viewmodel.product.ProductGetCheckoutListVm;
 import java.util.List;
@@ -36,12 +39,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 @ExtendWith(SpringExtension.class)
@@ -86,7 +86,6 @@ class CheckoutServiceTest {
                 .build();
         checkoutCreated.setCreatedBy("test-create-by");
         setSubjectUpSecurityContext(checkoutCreated.getCreatedBy());
-        when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mock(Jwt.class));
 
         checkoutItems = checkoutPostVm.checkoutItemPostVms().stream()
                 .map(itemVm -> CheckoutItem.builder()
@@ -98,11 +97,11 @@ class CheckoutServiceTest {
                 .build()
                 ).toList();
 
-        productCheckoutListVms = checkoutItems.stream().map(t -> {
-            return Instancio.of(ProductCheckoutListVm.class)
-                    .set(field(ProductCheckoutListVm.class, "id"), t.getProductId())
-                    .create();
-        }).toList();
+        productCheckoutListVms = checkoutItems.stream()
+                .map(t -> Instancio.of(ProductCheckoutListVm.class)
+                        .set(field(ProductCheckoutListVm.class, "id"), t.getProductId())
+                        .create())
+                .toList();
         productGetCheckoutListVm = new ProductGetCheckoutListVm(
                 productCheckoutListVms,
                 0,
@@ -119,7 +118,7 @@ class CheckoutServiceTest {
         checkoutCreated.setCheckoutItems(checkoutItems);
         when(checkoutRepository.save(any())).thenReturn(checkoutCreated);
         when(checkoutItemRepository.saveAll(anyCollection())).thenReturn(checkoutItems);
-        when(productService.getProductInfomation(any(Set.class), anyInt(), anyInt())).thenReturn(productCheckoutListVmMap);
+        when(productService.getProductInfomation(anySet(), anyInt(), anyInt())).thenReturn(productCheckoutListVmMap);
         var res = checkoutService.createCheckout(checkoutPostVm);
 
         assertThat(res)
@@ -191,6 +190,57 @@ class CheckoutServiceTest {
                 .hasFieldOrPropertyWithValue("email", checkoutPostVm.email());
 
         assertThat(res.checkoutItemVms()).isNull();
+    }
+
+    @Test
+    void testGetCheckoutPendingStateWithItemsById_whenCheckoutNotFound_thenThrowNotFoundException() {
+        when(checkoutRepository.findByIdAndCheckoutState(anyString(), eq(CheckoutState.PENDING)))
+            .thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> checkoutService.getCheckoutPendingStateWithItemsById("missing"));
+    }
+
+    @Test
+    void testUpdateCheckoutStatus_whenNormalCase_thenReturnOrderId() {
+        Checkout checkout = Checkout.builder()
+            .id(checkoutId)
+            .checkoutState(CheckoutState.PENDING)
+            .build();
+        checkout.setCreatedBy(checkoutCreated.getCreatedBy());
+        Order order = new Order();
+        order.setId(99L);
+
+        when(checkoutRepository.findById(checkoutId)).thenReturn(Optional.of(checkout));
+        when(checkoutRepository.save(checkout)).thenReturn(checkout);
+        when(orderService.findOrderByCheckoutId(checkoutId)).thenReturn(order);
+
+        Long result = checkoutService.updateCheckoutStatus(
+            new CheckoutStatusPutVm(checkoutId, CheckoutState.COMPLETED.name()));
+
+        assertThat(result).isEqualTo(99L);
+        assertThat(checkout.getCheckoutState()).isEqualTo(CheckoutState.COMPLETED);
+    }
+
+    @Test
+    void testUpdateCheckoutStatus_whenCheckoutNotFound_thenThrowNotFoundException() {
+        when(checkoutRepository.findById("missing")).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class,
+            () -> checkoutService.updateCheckoutStatus(new CheckoutStatusPutVm("missing", CheckoutState.COMPLETED.name())));
+    }
+
+    @Test
+    void testUpdateCheckoutStatus_whenNotOwnedByCurrentUser_thenThrowForbiddenException() {
+        Checkout checkout = Checkout.builder()
+            .id(checkoutId)
+            .checkoutState(CheckoutState.PENDING)
+            .build();
+        checkout.setCreatedBy("other-user");
+        when(checkoutRepository.findById(checkoutId)).thenReturn(Optional.of(checkout));
+        setSubjectUpSecurityContext("current-user");
+
+        assertThrows(ForbiddenException.class,
+            () -> checkoutService.updateCheckoutStatus(new CheckoutStatusPutVm(checkoutId, CheckoutState.COMPLETED.name())));
     }
 
     @Test

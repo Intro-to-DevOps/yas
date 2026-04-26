@@ -25,6 +25,7 @@ public class CartItemController {
     @PostMapping("/storefront/cart/items")
     public ResponseEntity<CartItemGetVm> addCartItem(@Valid @RequestBody CartItemPostVm cartItemPostVm) {
         CartItemGetVm cartItemGetVm = cartItemService.addCartItem(cartItemPostVm);
+        int b = 5;
         return ResponseEntity.ok(cartItemGetVm);
     }
 

@@ -7,7 +7,6 @@ import com.yas.payment.model.enumeration.PaymentMethod;
 import com.yas.payment.model.enumeration.PaymentStatus;
 import com.yas.payment.repository.PaymentRepository;
 import com.yas.payment.service.provider.handler.PaymentHandler;
-import com.yas.payment.service.provider.handler.PaypalHandler;
 import com.yas.payment.viewmodel.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,12 +14,11 @@ import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -28,7 +26,7 @@ class PaymentServiceTest {
     private PaymentRepository paymentRepository;
     private OrderService orderService;
     private PaymentHandler paymentHandler;
-    private List<PaymentHandler> paymentHandlers = new ArrayList<>();
+    private final List<PaymentHandler> paymentHandlers = new ArrayList<>();
     private PaymentService paymentService;
 
     private Payment payment;
@@ -81,6 +79,27 @@ class PaymentServiceTest {
         verifyPaymentCreation(capturePaymentResponseVm);
         verifyOrderServiceInteractions(capturedPayment);
         verifyResult(capturedPayment, capturePaymentResponseVm);
+    }
+
+    @Test
+    void initPayment_UnsupportedProvider_shouldThrowIllegalArgumentException() {
+        InitPaymentRequestVm initPaymentRequestVm = InitPaymentRequestVm.builder()
+            .paymentMethod("UNSUPPORTED")
+            .totalPrice(BigDecimal.TEN)
+            .checkoutId("123")
+            .build();
+
+        assertThrows(IllegalArgumentException.class, () -> paymentService.initPayment(initPaymentRequestVm));
+    }
+
+    @Test
+    void capturePayment_UnsupportedProvider_shouldThrowIllegalArgumentException() {
+        CapturePaymentRequestVm capturePaymentRequestVm = CapturePaymentRequestVm.builder()
+            .paymentMethod("UNSUPPORTED")
+            .token("token")
+            .build();
+
+        assertThrows(IllegalArgumentException.class, () -> paymentService.capturePayment(capturePaymentRequestVm));
     }
 
     private CapturedPayment prepareCapturedPayment() {
