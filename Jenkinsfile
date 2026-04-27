@@ -221,7 +221,7 @@ pipeline {
                                             echo "[SECURITY] STARTING SONARCLOUD SCAN (JS/NPM): ${currentSvc}"
                                             echo "=========================================================="
                                             cd ${currentSvc}
-                                            sonar-scanner -Dsonar.projectKey=intro-to-devops_yas-${currentSvc} -Dsonar.organization=intro-to-devops -Dsonar.sources=. -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN
+                                            sonar-scanner -Dsonar.projectKey=intro-to-devops_yas-${currentSvc} -Dsonar.organization=intro-to-devops -Dsonar.sources=. -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN -Dsonar.ws.timeout=300
                                         """
                                     } else {
                                         sh """
@@ -229,7 +229,7 @@ pipeline {
                                             echo "[SECURITY] STARTING SONARCLOUD SCAN (MAVEN): ${currentSvc}"
                                             echo "=========================================================="
                                             cd ${currentSvc}
-                                            mvn sonar:sonar -Dsonar.projectKey=intro-to-devops_yas-${currentSvc} -Dsonar.organization=intro-to-devops -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN
+                                            mvn sonar:sonar -Dsonar.projectKey=intro-to-devops_yas-${currentSvc} -Dsonar.organization=intro-to-devops -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN -Dsonar.ws.timeout=300
                                         """
                                     }
                                 }
