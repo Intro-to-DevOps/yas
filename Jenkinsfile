@@ -316,6 +316,43 @@ pipeline {
             publishCoverage adapters: [
                 jacocoAdapter('**/target/site/jacoco/jacoco.xml')
             ]
+
+            script {
+                // Aggregate all HTML reports from services into a single directory for display
+                sh """
+                    mkdir -p jacoco-html-reports
+                    
+                    # Create a root index.html to contain links to all services
+                    echo '<html><head><title>JaCoCo Reports</title><style>body{font-family:Arial,sans-serif; margin:40px;} li{margin:10px 0;} a{text-decoration:none; color:#0366d6;} a:hover{text-decoration:underline;}</style></head><body>' > jacoco-html-reports/index.html
+                    echo '<h2>JaCoCo HTML Coverage Reports</h2><ul>' >> jacoco-html-reports/index.html
+                    
+                    # Iterate through all generated jacoco directories
+                    for dir in */target/site/jacoco; do
+                        if [ -d "\$dir" ]; then
+                            # Get the service name (e.g., cart, product...)
+                            svc=\$(dirname \$(dirname \$(dirname \$dir)))
+                            
+                            # Copy all HTML files of that service into the common directory
+                            mkdir -p "jacoco-html-reports/\$svc"
+                            cp -r "\$dir/"* "jacoco-html-reports/\$svc/"
+                            
+                            # Add a link to the root index.html
+                            echo "<li><a href='\${svc}/index.html'>Coverage Report for <b>\${svc}</b></a></li>" >> jacoco-html-reports/index.html
+                        fi
+                    done
+                    
+                    echo '</ul></body></html>' >> jacoco-html-reports/index.html
+                """
+            }
+
+            publishHTML(target: [
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'jacoco-html-reports',
+                reportFiles: 'index.html',
+                reportName: 'JaCoCo HTML Report'
+            ])
         }
     }
 }
