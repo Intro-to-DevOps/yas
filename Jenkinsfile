@@ -269,6 +269,42 @@ pipeline {
         }
 
         // =========================
+        // VERIFY COVERAGE
+        // =========================
+        stage('Verify Coverage') {
+            when {
+                expression { env.CHANGED_SERVICES?.trim() }
+            }
+            steps {
+                script {
+                    def rawServices = env.CHANGED_SERVICES?.trim() ? env.CHANGED_SERVICES.split(',').collect { it.trim() } : []
+                    def services = rawServices.unique()
+                    def javaServices = services.findAll { !(it in ['backoffice', 'storefront']) && it != '' }
+
+                    if (!javaServices.isEmpty()) {
+                        echo "=========================================================="
+                        echo "[VERIFY] CHECKING CODE COVERAGE THRESHOLD (70%)"
+                        echo "=========================================================="
+                        
+                        jacoco(
+                            execPattern: '**/target/jacoco.exec',
+                            classPattern: '**/target/classes',
+                            sourcePattern: '**/src/main/java',
+                            minimumInstructionCoverage: '70', maximumInstructionCoverage: '70',
+                            minimumLineCoverage: '70', maximumLineCoverage: '70',
+                            minimumBranchCoverage: '70', maximumBranchCoverage: '70',
+                            changeBuildStatus: true
+                        )
+                        
+                        if (currentBuild.result == 'FAILURE' || currentBuild.result == 'UNSTABLE') {
+                            error("Test coverage below 70% threshold! Please write more tests.")
+                        }
+                    }
+                }
+            }
+        }
+
+        // =========================
         // BUILD PHASE
         // =========================
         stage('Build') {
