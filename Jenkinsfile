@@ -231,7 +231,7 @@ pipeline {
                                             ls -la target/site/jacoco/jacoco.xml || echo "🚨 JACOCO XML FILE NOT FOUND 🚨"
                                             echo "=========================================================="
                                             
-                                            mvn sonar:sonar -X -Dsonar.projectKey=intro-to-devops_yas-${currentSvc} -Dsonar.organization=intro-to-devops -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN -Dsonar.ws.timeout=300
+                                            mvn sonar:sonar -X -Dsonar.projectKey=intro-to-devops_yas-${currentSvc} -Dsonar.organization=intro-to-devops -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=\$SONAR_TOKEN -Dsonar.ws.timeout=300 -Dsonar.working.directory=target/sonar-scanner
                                         """
                                     }
                                 }
