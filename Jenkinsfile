@@ -156,11 +156,9 @@ pipeline {
                                 minimumInstructionCoverage: '70', maximumInstructionCoverage: '70',
                                 minimumLineCoverage: '70', maximumLineCoverage: '70',
                                 minimumBranchCoverage: '70', maximumBranchCoverage: '70',
-                                changeBuildStatus: true
+                                changeBuildStatus: false
                             )
-                            if (currentBuild.result == 'FAILURE' || currentBuild.result == 'UNSTABLE') {
-                                error("Test coverage below 70%")
-                            }
+                            // Let SonarCloud handle Quality Gate for coverage
                         }
                     }
 
