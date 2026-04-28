@@ -45,6 +45,7 @@ class CartItemServiceTest {
     private ProductService productService;
 
     @Spy
+    @SuppressWarnings("unused")
     private CartItemMapper cartItemMapper = new CartItemMapper();
 
     @InjectMocks
@@ -90,7 +91,7 @@ class CartItemServiceTest {
                 .build();
             int expectedQuantity = existingCartItem.getQuantity() + cartItemPostVm.quantity();
 
-            mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
+            mockCurrentUserId();
             when(productService.existsById(cartItemPostVm.productId())).thenReturn(true);
             when(cartItemRepository.findByCustomerIdAndProductId(anyString(), anyLong())).thenReturn(
                 Optional.of(existingCartItem));
@@ -108,7 +109,7 @@ class CartItemServiceTest {
         void testAddCartItem_whenCartItemDoesNotExist_shouldCreateCartItem() {
             CartItemPostVm cartItemPostVm = cartItemPostVmBuilder.build();
 
-            mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
+            mockCurrentUserId();
             when(productService.existsById(cartItemPostVm.productId())).thenReturn(true);
             when(cartItemRepository.findByCustomerIdAndProductId(anyString(), anyLong())).thenReturn(
                 java.util.Optional.empty());
@@ -126,7 +127,7 @@ class CartItemServiceTest {
         void testAddCartItem_whenAcquireLockFailed_shouldThrowInternalServerErrorException() {
             CartItemPostVm cartItemPostVm = cartItemPostVmBuilder.build();
 
-            mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
+            mockCurrentUserId();
             when(productService.existsById(cartItemPostVm.productId())).thenReturn(true);
             when(cartItemRepository.findByCustomerIdAndProductId(anyString(), anyLong()))
                 .thenThrow(new PessimisticLockingFailureException("Locking failed"));
@@ -156,7 +157,7 @@ class CartItemServiceTest {
 
         @Test
         void testUpdateCartItem_whenRequestIsValid_shouldReturnCartItem() {
-            mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
+            mockCurrentUserId();
             when(productService.existsById(PRODUCT_ID_SAMPLE)).thenReturn(true);
             when(cartItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -183,7 +184,7 @@ class CartItemServiceTest {
 
             when(cartItemRepository.findByCustomerIdOrderByCreatedOnDesc(CURRENT_USER_ID_SAMPLE))
                 .thenReturn(existingCartItems);
-            mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
+            mockCurrentUserId();
 
             List<CartItemGetVm> cartItemGetVms = cartItemService.getCartItems();
 
@@ -217,7 +218,26 @@ class CartItemServiceTest {
                 new CartItemDeleteVm(existingCartItem.getProductId(), existingCartItem.getQuantity() + 1);
             List<CartItemDeleteVm> cartItemDeleteVms = List.of(cartItemDeleteVm);
 
-            mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
+            mockCurrentUserId();
+            when(cartItemRepository.findByCustomerIdAndProductIdIn(any(), any())).thenReturn(List.of(existingCartItem));
+
+            List<CartItemGetVm> cartItemGetVms = cartItemService.deleteOrAdjustCartItem(cartItemDeleteVms);
+
+            verify(cartItemRepository).deleteAll(List.of(existingCartItem));
+            assertEquals(0, cartItemGetVms.size());
+        }
+
+        @Test
+        void testDeleteOrAdjustCartItem_whenDeleteQuantityEqualsCartItemQuantity_shouldDeleteCartItem() {
+            CartItemDeleteVm cartItemDeleteVm = new CartItemDeleteVm(PRODUCT_ID_SAMPLE, 1);
+            CartItem existingCartItem = CartItem.builder()
+                .customerId(CURRENT_USER_ID_SAMPLE)
+                .productId(cartItemDeleteVm.productId())
+                .quantity(cartItemDeleteVm.quantity())
+                .build();
+            List<CartItemDeleteVm> cartItemDeleteVms = List.of(cartItemDeleteVm);
+
+            mockCurrentUserId();
             when(cartItemRepository.findByCustomerIdAndProductIdIn(any(), any())).thenReturn(List.of(existingCartItem));
 
             List<CartItemGetVm> cartItemGetVms = cartItemService.deleteOrAdjustCartItem(cartItemDeleteVms);
@@ -237,7 +257,7 @@ class CartItemServiceTest {
             List<CartItemDeleteVm> cartItemDeleteVms = List.of(cartItemDeleteVm);
             int expectedQuantity = existingCartItem.getQuantity() - cartItemDeleteVm.quantity();
 
-            mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
+            mockCurrentUserId();
             when(cartItemRepository.findByCustomerIdAndProductIdIn(any(), any())).thenReturn(List.of(existingCartItem));
             when(cartItemRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -247,16 +267,43 @@ class CartItemServiceTest {
             assertEquals(1, cartItemGetVms.size());
             assertEquals(expectedQuantity, cartItemGetVms.getFirst().quantity());
         }
+
+        @Test
+        void testDeleteOrAdjustCartItem_whenNoMatchingCartItems_shouldReturnEmptyList() {
+            List<CartItemDeleteVm> cartItemDeleteVms = List.of(new CartItemDeleteVm(PRODUCT_ID_SAMPLE, 1));
+
+            mockCurrentUserId();
+            when(cartItemRepository.findByCustomerIdAndProductIdIn(any(), any())).thenReturn(List.of());
+
+            List<CartItemGetVm> cartItemGetVms = cartItemService.deleteOrAdjustCartItem(cartItemDeleteVms);
+
+            verify(cartItemRepository).deleteAll(List.of());
+            verify(cartItemRepository).saveAll(List.of());
+            assertEquals(0, cartItemGetVms.size());
+        }
     }
 
-    private void mockCurrentUserId(String userIdToMock) {
+    @Nested
+    class DeleteCartItemTest {
+
+        @Test
+        void testDeleteCartItem_shouldDeleteByCurrentUserAndProductId() {
+            mockCurrentUserId();
+
+            cartItemService.deleteCartItem(PRODUCT_ID_SAMPLE);
+
+            verify(cartItemRepository).deleteByCustomerIdAndProductId(CURRENT_USER_ID_SAMPLE, PRODUCT_ID_SAMPLE);
+        }
+    }
+
+    private void mockCurrentUserId() {
         Jwt jwt = mock(Jwt.class);
         JwtAuthenticationToken jwtToken = new JwtAuthenticationToken(jwt);
 
         SecurityContext securityContext = mock(SecurityContext.class);
         when(securityContext.getAuthentication()).thenReturn(jwtToken);
 
-        when(jwt.getSubject()).thenReturn(userIdToMock);
+        when(jwt.getSubject()).thenReturn(CURRENT_USER_ID_SAMPLE);
         SecurityContextHolder.setContext(securityContext);
     }
 }
