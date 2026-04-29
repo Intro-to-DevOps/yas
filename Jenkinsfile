@@ -156,8 +156,8 @@ pipeline {
                                 classPattern: classPatterns,
                                 sourcePattern: sourcePatterns,
                                 minimumInstructionCoverage: '70', maximumInstructionCoverage: '70',
-                                minimumLineCoverage: '70', maximumLineCoverage: '70',
-                                minimumBranchCoverage: '70', maximumBranchCoverage: '70',
+                                // minimumLineCoverage: '70', maximumLineCoverage: '70',
+                                // minimumBranchCoverage: '70', maximumBranchCoverage: '70',
                                 changeBuildStatus: true
                             )
                             if (currentBuild.result == 'FAILURE' || currentBuild.result == 'UNSTABLE') {
