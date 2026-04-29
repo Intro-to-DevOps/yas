@@ -143,8 +143,6 @@ pipeline {
                     // 3. Process Java Services: Combine into a single command!
                     if (!javaServices.isEmpty()) {
                         def plArgs = javaServices.join(',') // Example: "product,cart"
-                        def classPatterns = javaServices.collect { "${it}/target/classes" }.join(',')
-                        def sourcePatterns = javaServices.collect { "${it}/src/main/java" }.join(',')
                         jobs['Java Services Tests'] = {
                             sh "chmod +x mvnw"
                             // Bring back the -am flag. Since we run in a single command, there are no race conditions or ${revision} errors
@@ -153,11 +151,11 @@ pipeline {
                             // Aggregate coverage reports from all modules using **
                             jacoco(
                                 execPattern: '**/target/jacoco.exec',
-                                classPattern: classPatterns,
-                                sourcePattern: sourcePatterns,
+                                classPattern: '**/target/classes',
+                                sourcePattern: '**/src/main/java',
                                 minimumInstructionCoverage: '70', maximumInstructionCoverage: '70',
-                                // minimumLineCoverage: '70', maximumLineCoverage: '70',
-                                // minimumBranchCoverage: '70', maximumBranchCoverage: '70',
+                                minimumLineCoverage: '70', maximumLineCoverage: '70',
+                                minimumBranchCoverage: '70', maximumBranchCoverage: '70',
                                 changeBuildStatus: true
                             )
                             if (currentBuild.result == 'FAILURE' || currentBuild.result == 'UNSTABLE') {
