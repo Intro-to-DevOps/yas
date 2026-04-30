@@ -17,6 +17,7 @@ import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.yas.promotion.viewmodel.PromotionUsageVm;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration;
@@ -215,7 +216,6 @@ class PromotionControllerTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("Date parameter conversion requires full Spring Boot context")
     void testListPromotions_whenValidRequest_thenReturnPromotionListVm() throws Exception {
 
         PromotionDetailVm promoDetail1 = PromotionDetailVm.builder()
@@ -382,6 +382,21 @@ class PromotionControllerTest {
         promotionPutVm.setStartDate(Date.from(startDate));
         promotionPutVm.setEndDate(Date.from(endDate));
         return promotionPutVm;
+    }
+
+    @Test
+    void testUpdateUsagePromotion_whenValidRequest_thenReturnOk() throws Exception {
+        PromotionUsageVm usageVm = new PromotionUsageVm("code", 1L, "user", 100L);
+        List<PromotionUsageVm> usageVms = List.of(usageVm);
+
+        doNothing().when(promotionService).updateUsagePromotion(anyList());
+
+        mockMvc.perform(post("/backoffice/promotions/updateUsage")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectWriter.writeValueAsString(usageVms)))
+                .andExpect(status().isOk());
+
+        verify(promotionService).updateUsagePromotion(anyList());
     }
 
 }
