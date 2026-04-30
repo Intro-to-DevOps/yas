@@ -144,6 +144,20 @@ class ProductServiceTest {
     }
 
     @Test
+    void testFindProductAdvance_whenCriteriaValuesAreNull_ReturnProductListGetVm() {
+        SearchHits<Product> searchHits = getSearchHits();
+        when(elasticsearchOperations.search(any(NativeQuery.class), eq(Product.class))).thenReturn(searchHits);
+
+        ProductCriteriaDto criteriaDto = new ProductCriteriaDto(
+            "test", 0, 10, null, null,
+            null, null, null, SortType.DEFAULT);
+        productService.findProductAdvance(criteriaDto);
+
+        verify(elasticsearchOperations, times(1))
+            .search(any(NativeQuery.class), eq(Product.class));
+    }
+
+    @Test
     void testAutoCompleteProductName_whenExistsProducts_returnProductNameListVm() {
 
         SearchHits<Product> searchHits =
