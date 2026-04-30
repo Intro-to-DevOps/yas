@@ -19,11 +19,16 @@ import com.yas.promotion.viewmodel.PromotionDetailVm;
 import com.yas.promotion.viewmodel.PromotionListVm;
 import com.yas.promotion.viewmodel.PromotionPostVm;
 import com.yas.promotion.viewmodel.PromotionVerifyVm;
+import com.yas.promotion.repository.PromotionUsageRepository;
+import com.yas.promotion.viewmodel.PromotionPutVm;
+import com.yas.promotion.viewmodel.PromotionUsageVm;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,12 +36,19 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(classes = PromotionApplication.class)
 class PromotionServiceTest {
     @Autowired
     private PromotionRepository promotionRepository;
+    @MockitoBean
+    private PromotionUsageRepository promotionUsageRepository;
     @MockitoBean
     private ProductService productService;
     @Autowired
@@ -136,6 +148,7 @@ class PromotionServiceTest {
     @AfterEach
     void tearDown() {
         promotionRepository.deleteAll();
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -331,6 +344,78 @@ class PromotionServiceTest {
         assertEquals(1L, result.productId());
         assertEquals(DiscountType.FIXED, result.discountType());
         assertEquals(200L, result.discountValue().longValue());
+    }
+
+    @Test
+    void updatePromotion_ThenSuccess() {
+        PromotionPutVm promotionPutVm = PromotionPutVm.builder()
+                .id(promotion1.getId())
+                .name("Updated Promotion")
+                .slug("updated-promotion")
+                .couponCode("updated-code")
+                .startDate(Date.from(Instant.now()))
+                .endDate(Date.from(Instant.now().plus(10, ChronoUnit.DAYS)))
+                .isActive(true)
+                .applyTo(ApplyTo.PRODUCT)
+                .productIds(List.of(1L))
+                .discountType(DiscountType.FIXED)
+                .discountAmount(500L)
+                .build();
+
+        PromotionDetailVm result = promotionService.updatePromotion(promotionPutVm);
+        assertEquals("updated-promotion", result.slug());
+        assertEquals("Updated Promotion", result.name());
+        assertEquals("updated-code", result.couponCode());
+    }
+
+    @Test
+    void updatePromotion_WhenNotFound_ThenNotFoundExceptionThrown() {
+        PromotionPutVm promotionPutVm = PromotionPutVm.builder()
+                .id(999L)
+                .build();
+        assertThrows(NotFoundException.class, () -> promotionService.updatePromotion(promotionPutVm));
+    }
+
+    @Test
+    void deletePromotion_ThenSuccess() {
+        Mockito.when(promotionUsageRepository.existsByPromotionId(promotion1.getId())).thenReturn(false);
+        promotionService.deletePromotion(promotion1.getId());
+        assertEquals(Optional.empty(), promotionRepository.findById(promotion1.getId()));
+    }
+
+    @Test
+    void deletePromotion_WhenInUse_ThenBadRequestExceptionThrown() {
+        Mockito.when(promotionUsageRepository.existsByPromotionId(promotion1.getId())).thenReturn(true);
+        assertThrows(BadRequestException.class, () -> promotionService.deletePromotion(promotion1.getId()));
+    }
+
+    @Test
+    void updateUsagePromotion_ThenSuccess() {
+        String couponCode = "code1";
+        PromotionUsageVm usageVm = new PromotionUsageVm(couponCode, 1L, "user-id", 100L);
+        
+        // Mock Security Context
+        Jwt jwt = Mockito.mock(Jwt.class);
+        Mockito.when(jwt.getSubject()).thenReturn("user-id");
+        JwtAuthenticationToken authentication = Mockito.mock(JwtAuthenticationToken.class);
+        Mockito.when(authentication.getToken()).thenReturn(jwt);
+        Mockito.when(authentication.getName()).thenReturn("user-id");
+        
+        SecurityContext securityContext = Mockito.mock(SecurityContext.class);
+        Mockito.when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        promotionService.updateUsagePromotion(List.of(usageVm));
+
+        Promotion updatedPromotion = promotionRepository.findById(promotion1.getId()).get();
+        assertEquals(1, updatedPromotion.getUsageCount());
+        Mockito.verify(promotionUsageRepository, Mockito.times(1)).save(ArgumentMatchers.any());
+    }
+
+    @Test
+    void updateUsagePromotion_WhenNotFound_ThenNotFoundExceptionThrown() {
+        PromotionUsageVm usageVm = new PromotionUsageVm("non-existent-code", 1L, "user-id", 100L);
+        assertThrows(NotFoundException.class, () -> promotionService.updateUsagePromotion(List.of(usageVm)));
     }
 
     private List<ProductVm> createProductVms() {
