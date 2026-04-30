@@ -28,39 +28,34 @@ pipeline {
         stage('Detect Changed Services') {
             steps {
                 script {
-                    echo "========== FETCH ORIGIN/MAIN =========="
-                    sh "git fetch origin main"
+                    def currentBranch = sh(
+                        script: "git rev-parse --abbrev-ref HEAD",
+                        returnStdout: true
+                    ).trim()
 
-                    echo "========== BRANCH INFO =========="
-                    sh "git branch -a"
-                    sh "git remote -v"
-
-                    echo "========== COMMIT INFO =========="
                     def headCommit = sh(
                         script: "git rev-parse HEAD",
                         returnStdout: true
                     ).trim()
-                    def mainCommit = sh(
-                        script: "git rev-parse origin/main",
-                        returnStdout: true
-                    ).trim()
-                    echo "HEAD commit:        ${headCommit}"
-                    echo "origin/main commit: ${mainCommit}"
 
-                    echo "========== RAW GIT DIFF =========="
-                    def changedFilesRaw = sh(
-                        script: "git diff --name-only origin/main..HEAD",
+                    def mainCommit = sh(
+                        script: "git rev-parse origin/main || true",
                         returnStdout: true
                     ).trim()
-                    echo "Raw output from git diff:\n[${changedFilesRaw}]"
+
+                    echo "========== FETCH CHECK =========="
+                    sh "git branch -a"
+                    sh "git remote -v"
+
+                    echo "========== DIFF FILES =========="
+
+                    def changedFilesRaw = sh(
+                        script: "git diff --name-only origin/main..HEAD || true",
+                        returnStdout: true
+                    ).trim()
 
                     def changedFiles = changedFilesRaw ? changedFilesRaw.split("\\n") : []
-                    echo "Total files detected: ${changedFiles.size()}"
-                    for (file in changedFiles) {
-                        echo "  FILE: [${file}]"
-                    }
 
-                    echo "========== MATCHING SERVICES =========="
                     def allServices = [
                         "backoffice", "storefront",
                         "backoffice-bff", "storefront-bff",
@@ -74,33 +69,31 @@ pipeline {
                     def changed = []
 
                     for (file in changedFiles) {
-                        def matched = false
+                        echo "Checking file: ${file}"
                         for (svc in allServices) {
-                            if (file.startsWith("${svc}/")) {
-                                echo "  [MATCH]    file='${file}' → service='${svc}'"
-                                if (!changed.contains(svc)) {
-                                    changed.add(svc)
-                                }
-                                matched = true
+                            if (file.startsWith("${svc}/") || file.contains("/${svc}/")) {
+                                echo "→ Matched service: ${svc}"
+                                changed.add(svc)
                             }
-                        }
-                        if (!matched) {
-                            echo "  [NO MATCH] file='${file}' → root file, ignored"
                         }
                     }
 
-                    echo "========== PRE-COMMON-LIBRARY CHECK =========="
-                    echo "Changed services before common-library check: ${changed}"
+                    changed = changed.unique()
 
                     if (changed.contains("common-library")) {
-                        echo "common-library changed → rebuild ALL services"
+                        echo "Common library changed → rebuild all services"
                         changed = allServices
                     }
 
-                    env.CHANGED_SERVICES = changed.join(",")
+                    def result = changed.join(",")
 
+                    env.CHANGED_SERVICES = result.toString()
+
+                    if (!env.CHANGED_SERVICES?.trim()) {
+                        env.CHANGED_SERVICES = ""
+                    }
                     echo "========== FINAL RESULT =========="
-                    echo "CHANGED_SERVICES = [${env.CHANGED_SERVICES}]"
+                    echo "Changed services: ${CHANGED_SERVICES}"
                 }
             }
         }
@@ -150,8 +143,6 @@ pipeline {
                     // 3. Process Java Services: Combine into a single command!
                     if (!javaServices.isEmpty()) {
                         def plArgs = javaServices.join(',') // Example: "product,cart"
-                        def classPatterns = javaServices.collect { "${it}/target/classes" }.join(',')
-                        def sourcePatterns = javaServices.collect { "${it}/src/main/java" }.join(',')
                         jobs['Java Services Tests'] = {
                             sh "chmod +x mvnw"
                             // Bring back the -am flag. Since we run in a single command, there are no race conditions or ${revision} errors
@@ -160,11 +151,11 @@ pipeline {
                             // Aggregate coverage reports from all modules using **
                             jacoco(
                                 execPattern: '**/target/jacoco.exec',
-                                classPattern: classPatterns,
-                                sourcePattern: sourcePatterns,
+                                classPattern: '**/target/classes',
+                                sourcePattern: '**/src/main/java',
                                 minimumInstructionCoverage: '70', maximumInstructionCoverage: '70',
-                                // minimumLineCoverage: '70', maximumLineCoverage: '70',
-                                // minimumBranchCoverage: '70', maximumBranchCoverage: '70',
+                                minimumLineCoverage: '70', maximumLineCoverage: '70',
+                                minimumBranchCoverage: '70', maximumBranchCoverage: '70',
                                 changeBuildStatus: true
                             )
                             if (currentBuild.result == 'FAILURE' || currentBuild.result == 'UNSTABLE') {
