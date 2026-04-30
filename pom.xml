@@ -56,9 +56,9 @@
         <opentelemetry-semconv.version>1.37.0</opentelemetry-semconv.version>
         <spring-cloud.version>2025.1.1</spring-cloud.version>
         <springdoc-openapi-starter-webmvc-ui.version>3.0.1</springdoc-openapi-starter-webmvc-ui.version>
-        <keycloak-spring-security-adapter.version>26.0.8</keycloak-spring-security-adapter.version>
+        <keycloak-spring-security-adapter.version>25.0.3</keycloak-spring-security-adapter.version>
         <org.keycloak.version>26.0.8</org.keycloak.version>
-        <keycloak-spring-boot-starter.version>26.0.8</keycloak-spring-boot-starter.version>
+        <keycloak-spring-boot-starter.version>25.0.3</keycloak-spring-boot-starter.version>
         <commons-validator.version>1.9.0</commons-validator.version>
         <org.elasticsearch.version>9.2.3</org.elasticsearch.version>
         <paypal-checkout-sdk.version>2.0.0</paypal-checkout-sdk.version>
@@ -74,6 +74,7 @@
         <kafka-clients.version>4.1.2</kafka-clients.version>
         <lz4-java.version>1.8.1</lz4-java.version>
         <spring-security-oauth2-authorization-server.version>7.0.5</spring-security-oauth2-authorization-server.version>
+        <bouncycastle.version>1.84</bouncycastle.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -173,6 +174,47 @@
                 <groupId>org.springframework.retry</groupId>
                 <artifactId>spring-retry</artifactId>
                 <version>${spring-retry.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-core</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-common</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-authz-client</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-policy-enforcer</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-crypto-default</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-server-spi</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.postgresql</groupId>
