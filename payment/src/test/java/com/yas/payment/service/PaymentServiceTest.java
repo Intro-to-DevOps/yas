@@ -69,6 +69,13 @@ class PaymentServiceTest {
     }
 
     @Test
+    void initPayment_ProviderNotFound_ThrowsException() {
+        InitPaymentRequestVm initPaymentRequestVm = InitPaymentRequestVm.builder()
+                .paymentMethod("NON_EXISTENT_PROVIDER").totalPrice(BigDecimal.TEN).checkoutId("123").build();
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> paymentService.initPayment(initPaymentRequestVm));
+    }
+
+    @Test
     void capturePayment_Success() {
         CapturePaymentRequestVm capturePaymentRequestVM = CapturePaymentRequestVm.builder()
                 .paymentMethod(PaymentMethod.PAYPAL.name()).token("123").build();

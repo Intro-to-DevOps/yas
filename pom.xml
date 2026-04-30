@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.2</version>
+        <version>4.0.6</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.yas</groupId>
@@ -57,7 +57,7 @@
         <spring-cloud.version>2025.1.1</spring-cloud.version>
         <springdoc-openapi-starter-webmvc-ui.version>3.0.1</springdoc-openapi-starter-webmvc-ui.version>
         <keycloak-spring-security-adapter.version>25.0.3</keycloak-spring-security-adapter.version>
-        <org.keycloak.version>26.0.1</org.keycloak.version>
+        <org.keycloak.version>26.6.1</org.keycloak.version>
         <keycloak-spring-boot-starter.version>25.0.3</keycloak-spring-boot-starter.version>
         <commons-validator.version>1.9.0</commons-validator.version>
         <org.elasticsearch.version>9.2.3</org.elasticsearch.version>
@@ -66,9 +66,15 @@
         <testcontainers.version>2.0.3</testcontainers.version>
         <rest-assured.version>6.0.0</rest-assured.version>
         <instancio-junit.version>5.0.2</instancio-junit.version>
-        <opencsv.version>5.9</opencsv.version>
+        <opencsv.version>5.10</opencsv.version>
         <spring-retry.version>2.0.12</spring-retry.version>
         <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
+        <postgresql.version>42.7.11</postgresql.version>
+        <commons-beanutils.version>1.11.0</commons-beanutils.version>
+        <kafka-clients.version>4.1.2</kafka-clients.version>
+        <lz4-java.version>1.8.1</lz4-java.version>
+        <spring-security-oauth2-authorization-server.version>7.0.5</spring-security-oauth2-authorization-server.version>
+        <bouncycastle.version>1.84</bouncycastle.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -168,6 +174,82 @@
                 <groupId>org.springframework.retry</groupId>
                 <artifactId>spring-retry</artifactId>
                 <version>${spring-retry.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-core</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-common</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-authz-client</artifactId>
+                <version>26.0.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-policy-enforcer</artifactId>
+                <version>26.0.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-crypto-default</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-server-spi</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-server-spi-private</artifactId>
+                <version>${org.keycloak.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-admin-client</artifactId>
+                <version>26.0.9</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-beanutils</groupId>
+                <artifactId>commons-beanutils</artifactId>
+                <version>${commons-beanutils.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>${kafka-clients.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>${lz4-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-oauth2-authorization-server</artifactId>
+                <version>${spring-security-oauth2-authorization-server.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
